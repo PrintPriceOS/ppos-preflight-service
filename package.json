@@ -1,0 +1,17 @@
+{
+    "name": "@ppos/preflight-service",
+    "version": "1.0.0",
+    "description": "Industrial HTTP Wrapper for @ppos/preflight-engine",
+    "main": "server.js",
+    "private": true,
+    "scripts": {
+        "start": "node server.js",
+        "dev": "fastify start -l info server.js"
+    },
+    "dependencies": {
+        "@fastify/multipart": "^8.0.0",
+        "@ppos/preflight-engine": "file:../ppos-preflight-engine",
+        "fastify": "^4.24.0",
+        "fs-extra": "^11.1.0"
+    }
+}
