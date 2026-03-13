@@ -4,6 +4,7 @@
  * Industrial HTTP Entrypoint for Preflight Engine.
  * Classification: RUNTIME_SERVICE
  */
+require('dotenv').config();
 const fastify = require('fastify')({
     logger: {
         level: 'info',
@@ -52,4 +53,3 @@ const start = async () => {
 };
 
 start();
-坐
