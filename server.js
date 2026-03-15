@@ -1,51 +1,33 @@
 /**
- * @ppos/preflight-service
+ * PrintPrice OS — Preflight Service (v1.9.0)
  * 
- * Industrial HTTP Entrypoint for Preflight Engine.
- * Classification: RUNTIME_SERVICE
+ * Orchestration layer for PDF analysis and fixes.
  */
 require('dotenv').config();
-const fastify = require('fastify')({
-    logger: {
-        level: 'info',
-        formatters: {
-            level: (label) => { return { level: label.toUpperCase() }; }
-        }
-    }
-});
+const fastify = require('fastify')({ logger: true });
 const path = require('path');
 const fs = require('fs-extra');
 
-// Register Plugins
+// Plugins
 fastify.register(require('@fastify/multipart'), {
-    limits: {
-        fileSize: 100 * 1024 * 1024 // 100MB Industrial limit
-    }
+    limits: { fileSize: 500 * 1024 * 1024 } // 500MB
 });
+fastify.register(require('@fastify/cors'));
+fastify.register(require('@fastify/helmet'));
 
-// Register Routes
+// Ensure uploads dir
+const UPLOADS_DIR = process.env.PPOS_UPLOADS_DIR || path.join(__dirname, 'temp-staging');
+fs.ensureDirSync(UPLOADS_DIR);
+
+// Routes
+fastify.register(require('./routes/preflight'), { prefix: '/preflight' });
 fastify.register(require('./routes/health'), { prefix: '/health' });
-fastify.register(require('./routes/analyze'), { prefix: '/analyze' });
-fastify.register(require('./routes/autofix'), { prefix: '/autofix' });
 
-// Global Error Handler
-fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
-    reply.status(error.statusCode || 500).send({
-        ok: false,
-        error: error.code || 'INTERNAL_ERROR',
-        message: error.message
-    });
-});
-
-/**
- * Initialization Logic
- */
 const start = async () => {
     try {
-        const PORT = process.env.PPOS_PORT || 3000;
+        const PORT = process.env.PPOS_SERVICE_PORT || 3000;
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
-        fastify.log.info(`[SERVICE] Preflight Engine HTTP Wrapper active on port ${PORT}`);
+        console.log(`[SERVICE] Preflight active on port ${PORT}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
