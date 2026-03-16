@@ -9,14 +9,15 @@
     "dev": "fastify start -l info server.js"
   },
   "dependencies": {
-    "@fastify/multipart": "^8.0.0",
     "@fastify/cors": "^8.3.0",
     "@fastify/helmet": "^11.0.0",
+    "@fastify/multipart": "^8.0.0",
+    "@ppos/preflight-engine": "file:../ppos-preflight-engine",
+    "axios": "^1.6.0",
+    "bullmq": "^5.71.0",
+    "dotenv": "^17.3.1",
     "fastify": "^4.24.0",
     "fs-extra": "^11.1.0",
-    "uuid": "^9.0.1",
-    "dotenv": "^17.3.1",
-    "axios": "^1.6.0",
-    "@ppos/preflight-engine": "file:../ppos-preflight-engine"
+    "uuid": "^9.0.1"
   }
 }

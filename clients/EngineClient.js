@@ -10,15 +10,20 @@ class EngineClient {
 
     async analyze(filePath, options) {
         console.log(`[CLIENT][ENGINE] Calling engine for ${filePath}`);
-        // In reality, this might be a child_process, a native addon, 
-        // or a direct module call if shared.
-        if (this.engine && typeof this.engine.processPdf === 'function') {
-            return await this.engine.processPdf(filePath, options);
+        
+        if (this.engine) {
+            const report = await this.engine.analyzePdf(filePath, options);
+            // Flatten risk_score for product compatibility
+            return {
+                ...report,
+                risk_score: report.summary.risk_score,
+                status: report.ok ? 'PASS' : 'FAIL'
+            };
         }
         
-        // Mocking for now if engine not linked
         return {
             status: 'PASS',
+            risk_score: 0,
             findings: [],
             specs: { format: 'A4', pages: 10 }
         };
