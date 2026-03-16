@@ -1,6 +1,6 @@
 {
   "name": "@ppos/preflight-service",
-  "version": "1.0.0",
+  "version": "1.9.2",
   "description": "Orchestration & API Layer for PrintPrice OS Preflight",
   "main": "server.js",
   "private": true,

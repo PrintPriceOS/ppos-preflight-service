@@ -3,9 +3,7 @@
  * 
  * Validates external dependencies and system readiness.
  */
-const {
-    Ghostscript
-} = require('@ppos/preflight-engine');
+const { execSync } = require('child_process');
 const os = require('os');
 const fs = require('fs-extra');
 
@@ -19,8 +17,12 @@ module.exports = async function (fastify, opts) {
 
         try {
             // GS Check
-            const gs = new Ghostscript();
-            checks.ghostscript = true;
+            try {
+                execSync('gs --version', { stdio: 'ignore' });
+                checks.ghostscript = true;
+            } catch (e) {
+                checks.ghostscript = false;
+            }
 
             // Temp Dir Check
             const tempDir = process.env.PPOS_TEMP_DIR || os.tmpdir();

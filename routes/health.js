@@ -1,12 +1,24 @@
 /**
  * Health Route
  */
+const { execSync } = require('child_process');
+
+async function checkGs() {
+    try {
+        execSync('gs --version', { stdio: 'ignore' });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 async function healthRoute(fastify, options) {
     fastify.get('/', async () => {
+        const gsReady = await checkGs();
         return { 
-            status: 'UP', 
+            status: gsReady ? 'UP' : 'DEGRADED', 
             service: 'ppos-preflight-service',
-            version: '1.9.0',
+            version: '1.9.2',
             env: process.env.NODE_ENV || 'development',
             timestamp: new Date().toISOString(),
             metrics: {
@@ -14,7 +26,8 @@ async function healthRoute(fastify, options) {
                 uptime: process.uptime()
             },
             dependencies: {
-                engine: 'LINKED', // Static for now as it's a local dependency
+                engine: 'LINKED',
+                ghostscript: gsReady ? 'READY' : 'MISSING',
                 storage: 'READY'
             }
         };
