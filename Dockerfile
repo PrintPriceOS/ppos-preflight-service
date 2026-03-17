@@ -16,7 +16,7 @@ COPY ppos-preflight-engine ./ppos-preflight-engine
 # Setup service
 WORKDIR /app/ppos-preflight-service
 COPY ppos-preflight-service/package*.json ./
-RUN npm ci --only=production
+RUN npm install --only=production --no-audit
 
 COPY ppos-preflight-service ./
 

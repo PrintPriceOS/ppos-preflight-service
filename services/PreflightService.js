@@ -25,9 +25,9 @@ class PreflightService {
         }
     }
 
-    async autofix(assetId, policy, tenantId) {
+    async autofix(assetId, policy, tenantId, options = {}) {
         // Orchestrate autofix job
-        return await this.worker.enqueue('AUTOFIX', { assetId, policy, tenantId });
+        return await this.worker.enqueue('AUTOFIX', { assetId, policy, tenantId, ...options });
     }
 }
 

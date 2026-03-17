@@ -65,7 +65,7 @@ async function preflightRoutes(fastify, options) {
         } else {
             // Async enqueue via JSON body
             const { asset_id, policy, tenant_id } = request.body || {};
-            const result = await service.autofix(asset_id, policy, tenant_id);
+            const result = await service.autofix(asset_id, policy, tenant_id, request.body);
             // Return result directly (flattened) for product compatibility
             return { ok: true, ...result };
         }
