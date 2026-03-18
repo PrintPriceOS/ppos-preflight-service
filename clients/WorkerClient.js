@@ -13,10 +13,10 @@ class WorkerClient {
         
         try {
             const job = await this.queue.add(type, data, {
-                attempts: 3,
+                attempts: 11, // 1 + 10 retries as per v1.11 hardening
                 backoff: {
                     type: 'exponential',
-                    delay: 1000
+                    delay: 30000 
                 }
             });
 

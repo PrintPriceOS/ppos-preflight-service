@@ -17,7 +17,10 @@ const redisConfig = {
     password: process.env.REDIS_PASSWORD
 };
 
-const storage = new FileStorage(path.join(__dirname, '../temp-staging'));
+const UPLOADS_DIR = process.env.PPOS_UPLOADS_DIR || path.join(__dirname, '../temp-staging');
+fs.ensureDirSync(UPLOADS_DIR);
+
+const storage = new FileStorage(UPLOADS_DIR);
 const service = new PreflightService(
     new EngineClient(engineInstance),
     new WorkerClient(redisConfig),
@@ -46,18 +49,23 @@ async function preflightRoutes(fastify, options) {
      */
     fastify.post('/autofix', async (request, reply) => {
         if (request.isMultipart()) {
-            const data = await request.file();
+            const parts = request.file();
+            const data = await parts;
             if (!data) return reply.status(400).send({ error: 'No file' });
 
             const buffer = await data.toBuffer();
-            const { filePath } = await storage.save(buffer, data.filename);
+            const { filePath, id: assetId } = await storage.save(buffer, data.filename);
             
-            // Execute synchronous fix via engine
-            const fixPlan = { type: request.query.fix || 'generic' };
+            // Extract policy from fields if present
+            const policyStr = data.fields?.policy?.value || '{"type":"generic"}';
+            const policy = JSON.parse(policyStr);
+            const tenantId = data.fields?.tenant_id?.value;
+
+            // Maintain synchronous behavior for direct uploads to avoid breaking product compatibility
+            const fixPlan = policy;
             const result = await engineInstance.autofixPdf(filePath, fixPlan);
             
             if (result.success) {
-                // Return fixed file directly for sync adapters
                 const fileBuffer = await fs.readFile(result.outputPath);
                 return reply.type('application/pdf').send(fileBuffer);
             }
