@@ -1,0 +1,60 @@
+{
+  "system": "PrintPrice OS",
+  "version": "v1.9.7-baseline",
+  "taxonomy": [
+    {
+      "category": "ISOLATION_FAILURE",
+      "severity": "CRITICAL",
+      "description": "Cross-tenant data leakage or unauthorized access to other tenant resources.",
+      "evidence": ["api_audit_log", "storage_paths", "db_tenant_mismatch"]
+    },
+    {
+      "category": "GOVERNANCE_ENFORCEMENT_FAILURE",
+      "severity": "HIGH",
+      "description": "Failure to block requests exceeding quotas or violating deployment contract rules.",
+      "evidence": ["usage_events", "governance_snapshot", "policyEngine_logs"]
+    },
+    {
+      "category": "TRACEABILITY_GAP",
+      "severity": "MEDIUM",
+      "description": "Missing critical events in the lifecycle (CREATED, STARTED, COMPLETED) for a given requestId.",
+      "evidence": ["api_audit_log", "job_status", "worker_logs"]
+    },
+    {
+      "category": "AUTH_FAILURE",
+      "severity": "HIGH",
+      "description": "Failure to correctly identify a user or leakage of authentication mechanics.",
+      "evidence": ["AUTH_FAILURE_audit", "jwt_verification_logs"]
+    },
+    {
+      "category": "AUTHZ_FAILURE",
+      "severity": "HIGH",
+      "description": "Unauthorized scope/role escalation or contract-governed support model bypass.",
+      "evidence": ["forbidden_responses", "admin_audit_logs"]
+    },
+    {
+      "category": "STORAGE_BOUNDARY_FAILURE",
+      "severity": "CRITICAL",
+      "description": "Files written to incorrect or shared paths instead of tenant-scoped storage.",
+      "evidence": ["storage_folders", "fs_operation_logs"]
+    },
+    {
+      "category": "RESILIENCE_FAILURE",
+      "severity": "MEDIUM",
+      "description": "Jobs stuck in non-terminal states without automated cleanup or quarantine.",
+      "evidence": ["orphaned_jobs", "timeout_events"]
+    },
+    {
+      "category": "EVIDENCE_PERSISTENCE_FAILURE",
+      "severity": "MEDIUM",
+      "description": "Audit events generated but not persisted to DB or logs correctly (e.g. governance_snapshot missing).",
+      "evidence": ["null_snapshots", "db_write_errors"]
+    },
+    {
+      "category": "PERFORMANCE_FORENSICS_FAILURE",
+      "severity": "LOW",
+      "description": "Audit queries or forensic lookups are slow due to missing or fragmented indexes.",
+      "explain_output": ["full_table_scans", "slow_query_logs"]
+    }
+  ]
+}

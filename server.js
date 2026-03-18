@@ -15,17 +15,18 @@ fastify.register(require('@fastify/multipart'), {
 fastify.register(require('@fastify/cors'));
 fastify.register(require('@fastify/helmet'));
 
-// Security: API Key Hook
+// Security: Identity Foundation (Contract-Aware Context)
+const buildRequestContext = require('./src/auth/buildRequestContext');
+
+// Add hook for all /api/* routes
 fastify.addHook('onRequest', async (request, reply) => {
-    // Skip API key for health checks
-    if (request.url.startsWith('/health')) return;
+    // Only apply to /api/* routes, excluding health and dev token
+    const isApi = request.url.startsWith('/api/');
+    const isHealth = request.url.startsWith('/health');
+    const isAuthToken = request.url === '/api/auth/token';
 
-    const apiKey = request.headers['x-ppos-api-key'];
-    const validKey = process.env.ADMIN_API_KEY;
-
-    if (!apiKey || apiKey !== validKey) {
-        request.log.warn({ url: request.url, ip: request.ip }, 'Unauthorized access attempt');
-        return reply.status(401).send({ error: 'Unauthorized: Invalid or missing API key' });
+    if (isApi && !isAuthToken) {
+        await buildRequestContext(request, reply);
     }
 });
 
@@ -34,7 +35,10 @@ const UPLOADS_DIR = process.env.PPOS_UPLOADS_DIR || path.join(__dirname, 'temp-s
 fs.ensureDirSync(UPLOADS_DIR);
 
 // Routes
-fastify.register(require('./routes/preflight'), { prefix: '/preflight' });
+fastify.register(require('./routes/preflight'), { prefix: '/api/preflight' });
+fastify.register(require('./routes/auth'), { prefix: '/api/auth' });
+fastify.register(require('./routes/admin'), { prefix: '/api/admin' });
+fastify.register(require('./routes/me'), { prefix: '/api/me' });
 fastify.register(require('./routes/health'), { prefix: '/health' });
 
 const start = async () => {
