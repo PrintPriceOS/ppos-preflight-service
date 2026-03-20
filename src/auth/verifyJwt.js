@@ -25,6 +25,11 @@ function verifyJwt(token) {
             audience: JWT_AUDIENCE
         });
     } catch (err) {
+        console.error(`[PPOS-JWT-ERROR] Validation failed: ${err.message}`, {
+            issuerExpected: JWT_ISSUER,
+            audienceExpected: JWT_AUDIENCE,
+            algo: JWT_ALGO
+        });
         throw new Error(`Invalid JWT: ${err.message}`);
     }
 }
