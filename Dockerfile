@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Satisfy the @ppos/preflight-engine & shared contracts dependency
-COPY ppos-preflight-engine ./ppos-preflight-engine
-COPY ppos-shared-contracts ./ppos-shared-contracts
+# Satisfy local dependencies (Copied into external context for isolation)
+COPY ppos-preflight-engine ./ppos-preflight-service/libs/ppos-preflight-engine
+COPY ppos-shared-contracts ./ppos-preflight-service/libs/ppos-shared-contracts
 
 # Setup service
 WORKDIR /app/ppos-preflight-service
