@@ -22,6 +22,9 @@ const redisConfig = {
 const UPLOADS_DIR = process.env.PPOS_UPLOADS_DIR || path.join(__dirname, '../temp-staging');
 fs.ensureDirSync(UPLOADS_DIR);
 
+// PRODUCTION LIMITS (Phase 5)
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+
 const storage = new StorageManager(UPLOADS_DIR);
 const service = new PreflightService(
     new EngineClient(engineInstance),
@@ -31,9 +34,13 @@ const service = new PreflightService(
 
 async function preflightRoutes(fastify, options) {
     /**
-     * POST /api/preflight/analyze
+     * POST /api/preflight/jobs
+     * Entry point for new analysis jobs.
      */
-    fastify.post('/analyze', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
+    fastify.post('/jobs', { 
+        preHandler: [requireScope('preflight:write')],
+        bodyLimit: MAX_FILE_SIZE
+    }, async (request, reply) => {
         try {
             const fileData = await request.file();
             if (!fileData) return reply.status(400).send({ error: 'No file' });
@@ -59,12 +66,46 @@ async function preflightRoutes(fastify, options) {
     });
 
     /**
-     * POST /api/preflight/autofix
-     * Handles both sync file uploads and async enqueuing.
+     * POST /analyze (Alias for /jobs)
      */
-    fastify.post('/autofix', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
+    fastify.post('/analyze', { 
+        preHandler: [requireScope('preflight:write')],
+        bodyLimit: MAX_FILE_SIZE
+    }, async (request, reply) => {
         try {
-            const { auth, deployment } = request.context;
+            const fileData = await request.file();
+            if (!fileData) return reply.status(400).send({ error: 'No file' });
+
+            const { auth } = request.context;
+            if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
+
+            const result = await service.analyze(
+                await fileData.toBuffer(), 
+                fileData.filename, 
+                request.context
+            );
+            return { ok: true, ...result };
+        } catch (err) {
+            if (err.isPolicyViolation) {
+                return reply.status(err.code === 'DEPLOYMENT_CONSTRAINT_BLOCKED' ? 429 : 403).send({
+                    error: err.code,
+                    message: err.message
+                });
+            }
+            throw err;
+        }
+    });
+
+    /**
+     * POST /jobs/:id/actions/fix
+     */
+    fastify.post('/jobs/:id/actions/fix', { 
+        preHandler: [requireScope('preflight:write')],
+        bodyLimit: MAX_FILE_SIZE
+    }, async (request, reply) => {
+        try {
+            const { id } = request.params;
+            const { auth } = request.context;
             if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
 
             if (request.isMultipart()) {
@@ -79,20 +120,32 @@ async function preflightRoutes(fastify, options) {
                 await storage.initializeJobStorage(request.context, jobId);
                 const { filePath } = await storage.saveInputFile(auth.tenantId, jobId, buffer, data.filename);
                 
-                const policyStr = data.fields?.policy?.value || '{"type":"generic"}';
-                const policy = JSON.parse(policyStr);
+                // Extract Fix Plan from Fields
+                const fixPlan = {
+                    target: data.fields?.target?.value || 'cmyk',
+                    profile: data.fields?.profile?.value || 'iso_coated_v3',
+                    bleedMm: parseFloat(data.fields?.bleedMm?.value || '3'),
+                    dpiPreferred: parseInt(data.fields?.dpiPreferred?.value || '300'),
+                    forceBleed: data.fields?.forceBleed?.value === '1',
+                    forceCmyk: data.fields?.forceCmyk?.value === '1',
+                    flatten: data.fields?.flatten?.value === '1',
+                    strictVector: data.fields?.strictVector?.value !== '0',
+                    issues: data.fields?.issues?.value ? JSON.parse(data.fields.issues.value) : null
+                };
 
-                const result = await engineInstance.autofixPdf(filePath, policy);
+                // Execute Engine
+                const result = await engineInstance.autofixPdf(filePath, fixPlan);
                 
                 if (result.success) {
                     const fileBuffer = await fs.readFile(result.outputPath);
                     return reply.type('application/pdf').send(fileBuffer);
                 }
-                return reply.status(500).send({ error: 'Autofix failed' });
+                return reply.status(500).send({ error: 'AUTOFIX_EXECUTION_FAILED', message: result.error });
             } else {
                 // Async enqueue via JSON body
-                const { asset_id, policy } = request.body || {};
-                const result = await service.autofix(asset_id, policy, request.context, request.body);
+                const { asset_id, policy, ...rest } = request.body || {};
+                const fixPlan = { ...(policy || {}), ...rest };
+                const result = await service.autofix(asset_id, fixPlan, request.context, request.body);
                 return { ok: true, ...result };
             }
         } catch (err) {
@@ -107,12 +160,37 @@ async function preflightRoutes(fastify, options) {
     });
 
     /**
-     * GET /api/preflight/status/:jobId
-     * Ownership-governed status check.
+     * POST /autofix
      */
-    fastify.get('/status/:jobId', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+    fastify.post('/autofix', { 
+        preHandler: [requireScope('preflight:write')],
+        bodyLimit: MAX_FILE_SIZE
+    }, async (request, reply) => {
+        try {
+            const { auth } = request.context;
+            if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
+
+            const { asset_id, policy, ...rest } = request.body || {};
+            const fixPlan = { ...(policy || {}), ...rest };
+            const result = await service.autofix(asset_id, fixPlan, request.context, request.body);
+            return { ok: true, ...result };
+        } catch (err) {
+            if (err.isPolicyViolation) {
+                return reply.status(err.code === 'DEPLOYMENT_CONSTRAINT_BLOCKED' ? 429 : 403).send({
+                    error: err.code,
+                    message: err.message
+                });
+            }
+            throw err;
+        }
+    });
+
+    /**
+     * GET /api/preflight/jobs/:id
+     */
+    fastify.get('/jobs/:id', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
         const { auth } = request.context;
-        const { jobId } = request.params;
+        const { id: jobId } = request.params;
 
         const jobPath = storage.getJobPath(auth.tenantId, jobId);
         const exists = await fs.pathExists(jobPath);
@@ -127,6 +205,36 @@ async function preflightRoutes(fastify, options) {
             tenantId: auth.tenantId,
             deploymentId: request.context.deployment.deploymentId
         };
+    });
+
+    /**
+     * POST /api/preflight/preview/pages
+     * Generates previews for the given job.
+     */
+    fastify.post('/preview/pages', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+        const { jobId } = request.body || {};
+        if (!jobId) return reply.status(400).send({ error: 'jobId is required' });
+
+        const result = await service.generatePreviews(jobId, request.context);
+        return result;
+    });
+
+    /**
+     * GET /api/preflight/preview/:jobId/:page
+     * Serves a rendered page image.
+     */
+    fastify.get('/preview/:jobId/:page', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+        const { auth } = request.context;
+        const { jobId, page } = request.params;
+
+        const previewPath = path.join(storage.getJobSubfolder(auth.tenantId, jobId, 'previews'), `p${page}.png`);
+        
+        if (!await fs.pathExists(previewPath)) {
+            return reply.status(404).send({ error: 'PREVIEW_NOT_FOUND' });
+        }
+
+        const buffer = await fs.readFile(previewPath);
+        return reply.type('image/png').send(buffer);
     });
 }
 
