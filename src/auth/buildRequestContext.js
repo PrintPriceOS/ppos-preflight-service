@@ -14,12 +14,17 @@ module.exports = async (request, reply) => {
         request: { 
             requestId,
             ip: request.ip,
-            userAgent: request.headers['user-agent']
+            userAgent: request.headers['user-agent'],
+            headers: {
+                'idempotency-key': request.headers['idempotency-key'],
+                'x-request-id': request.headers['x-request-id'] || requestId,
+                'x-job-id': request.headers['x-job-id']
+            }
         }
     };
 
-    // Skip for public routes like health
-    if (request.url.startsWith('/health')) return;
+    // Skip for public/auth routes
+    if (request.url.startsWith('/health') || request.url.startsWith('/api/auth')) return;
 
     try {
         // Load deployment context (cached after first call)

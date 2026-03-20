@@ -44,14 +44,20 @@ class AuthorizationService {
         
         if (!auth || !auth.role) return false;
 
+        // Normalize role to lowercase for lookup
+        const normalizedRole = auth.role.toLowerCase();
+
+        // Wildcard scopes (e.g. ['*'] from admin JWT)
+        if (Array.isArray(auth.scopes) && auth.scopes.includes('*')) return true;
+
         // 1. Role-based Scope Validation
-        const userScopes = ROLE_SCOPES[auth.role] || [];
+        const userScopes = ROLE_SCOPES[normalizedRole] || [];
         if (!userScopes.includes(requiredScope)) {
             return false;
         }
 
         // 2. Deployment Contract-Aware Governance Logic
-        return this.isPermittedByContract(context, requiredScope);
+        return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
     }
 
     /**

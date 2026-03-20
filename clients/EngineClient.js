@@ -9,7 +9,7 @@ class EngineClient {
     }
 
     async analyze(filePath, options) {
-        console.log(`[CLIENT][ENGINE] Calling engine for ${filePath}`);
+        console.log(`[CLIENT][ENGINE] Calling engine.analyze for ${filePath}`);
         
         if (this.engine) {
             const report = await this.engine.analyzePdf(filePath, options);
@@ -21,12 +21,23 @@ class EngineClient {
             };
         }
         
-        return {
-            status: 'PASS',
-            risk_score: 0,
-            findings: [],
-            specs: { format: 'A4', pages: 10 }
-        };
+        return { status: 'PASS', risk_score: 0, findings: [], specs: { pages: 1 } };
+    }
+
+    async autofix(filePath, fixPlan, options) {
+        console.log(`[CLIENT][ENGINE] Calling engine.autofix for ${filePath}`);
+        if (this.engine) {
+            return await this.engine.autofixPdf(filePath, fixPlan, options);
+        }
+        throw new Error('Engine not initialized');
+    }
+
+    async renderPage(filePath, outputPath, page, options) {
+        console.log(`[CLIENT][ENGINE] Calling engine.renderPage p${page}`);
+        if (this.engine) {
+            return await this.engine.renderPage(filePath, outputPath, page, options);
+        }
+        throw new Error('Engine not initialized');
     }
 }
 

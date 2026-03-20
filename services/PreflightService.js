@@ -1,6 +1,7 @@
 const db = require('../src/services/db');
 const policyEngine = require('../src/services/policyEngine');
 const auditLogger = require('../src/services/auditLogger');
+const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 
 /**
  * PreflightService
@@ -14,9 +15,19 @@ class PreflightService {
         this.storage = storage;
     }
 
-    async analyze(fileStream, filename, context) {
+    async analyze(fileStream, filename, context, options = {}) {
         const { auth, deployment, request: contextRequest } = context;
-        if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for analysis.');
+        if (!auth || !auth.tenantId) {
+            throw new PPOSError(ErrorCodes.UNAUTHORIZED, 'Tenant identification is mandatory.', ErrorTypes.USER_ERROR);
+        }
+
+        // Idempotency Check
+        const idempotencyKey = contextRequest.headers?.['idempotency-key'];
+        if (idempotencyKey) {
+            const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
+            if (existing) return { jobId: existing.id, status: 'QUEUED', reused: true };
+        }
+
         const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         const tenantId = auth.tenantId;
 
@@ -119,15 +130,15 @@ class PreflightService {
         // --- Phase 4: Runtime Governance ---
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
         await policyEngine.validateExecution(context, effectivePolicy, {
-             fileSize: options.fileSize || 0, // In autofix, we might assume check was passed in analyze or use direct input
+             fileSize: options.fileSize || 0,
              type: 'AUTOFIX'
         });
 
         // 1. PERSIST INITIAL STATE
         await db.execute(
-             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status) 
-              VALUES (?, ?, ?, ?, ?, ?)`,
-             [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED'],
+             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED', idempotencyKey],
              { tenantId, requestId: contextRequest.requestId }
         );
 
@@ -137,7 +148,7 @@ class PreflightService {
              resourceId: jobId
         });
 
-        // Orchestrate autofix job with strict contract-governed isolation
+        // Orchestrate autofix job
         const jobEnvelope = { 
             jobId,
             tenantId: auth.tenantId,
@@ -145,6 +156,7 @@ class PreflightService {
             deploymentId: deployment.deploymentId,
             tenantIsolation: deployment.tenantIsolation,
             serviceTier: deployment.serviceTier,
+            headers: contextRequest.headers, // PROPAGATE TRACE
             payload: {
                 assetId, 
                 policy,
@@ -153,6 +165,39 @@ class PreflightService {
         };
         
         return await this.worker.enqueue('AUTOFIX', jobEnvelope);
+    }
+
+    /**
+     * Generates visual previews for a job.
+     */
+    async generatePreviews(jobId, context, options = {}) {
+        const { auth } = context;
+        const tenantId = auth.tenantId;
+
+        // 1. Retrieve input file
+        const jobPath = this.storage.getJobPath(tenantId, jobId);
+        // Find the input file in the job's storage (assuming it's fixed name or we search)
+        const fs = require('fs-extra');
+        const path = require('path');
+        const files = await fs.readdir(jobPath);
+        const inputFile = files.find(f => f.endsWith('.pdf'));
+        
+        if (!inputFile) throw new Error('Input PDF not found for previews.');
+        const inputPath = path.join(jobPath, inputFile);
+        
+        // 2. Prepare output dir
+        const previewDir = this.storage.getJobSubfolder(tenantId, jobId, 'previews');
+        await fs.ensureDir(previewDir);
+
+        // 3. Render (Sync for p1 as baseline)
+        const outputPath = path.join(previewDir, 'p1.png');
+        await this.engine.renderPage(inputPath, outputPath, 1, options);
+
+        return {
+            ok: true,
+            jobId,
+            previews: [{ page: 1, url: `/api/preflight/preview/${jobId}/1` }]
+        };
     }
 }
 
