@@ -6,7 +6,8 @@ const mysql = require('mysql2/promise');
  */
 class DatabaseService {
     constructor() {
-        this.pool = mysql.createPool({
+        const dbUrl = process.env.DATABASE_URL;
+        const config = {
             host: process.env.MYSQL_HOST || 'localhost',
             user: process.env.MYSQL_USER || 'root',
             password: process.env.MYSQL_PASSWORD || 'PrintPrice123!',
@@ -18,9 +19,15 @@ class DatabaseService {
             queueLimit: 0,
             enableKeepAlive: true,
             keepAliveInitialDelay: 0
-        });
+        };
 
-        console.log(`[DB] Pool initialized for ${process.env.MYSQL_DATABASE || 'printprice_os'}`);
+        if (dbUrl) {
+            console.log('[DB] Initializing pool from DATABASE_URL');
+            this.pool = mysql.createPool(dbUrl);
+        } else {
+            console.log(`[DB] Initializing pool for ${config.host}/${config.database}`);
+            this.pool = mysql.createPool(config);
+        }
     }
 
     /**
