@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Satisfy the @ppos/preflight-engine dependency
-# This requires the build context to be at the workspace level
+# Satisfy the @ppos/preflight-engine & shared contracts dependency
 COPY ppos-preflight-engine ./ppos-preflight-engine
+COPY ppos-shared-contracts ./ppos-shared-contracts
 
 # Setup service
 WORKDIR /app/ppos-preflight-service
