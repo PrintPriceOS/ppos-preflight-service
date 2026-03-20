@@ -39,7 +39,7 @@ fs.ensureDirSync(UPLOADS_DIR);
 const storage = new StorageManager(UPLOADS_DIR);
 
 // Routes
-fastify.register(require('./routes/preflight'), { prefix: '/preflight' });
+fastify.register(require('./routes/preflight'), { prefix: '/api/preflight' });
 fastify.register(require('./routes/auth'), { prefix: '/api/auth' });
 fastify.register(require('./routes/admin'), { prefix: '/api/admin' });
 fastify.register(require('./routes/me'), { prefix: '/api/me' });
