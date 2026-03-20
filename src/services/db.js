@@ -8,18 +8,20 @@ class DatabaseService {
     constructor() {
         const dbUrl = process.env.DATABASE_URL;
         const config = {
-            host: process.env.MYSQL_HOST || 'localhost',
-            user: process.env.MYSQL_USER || 'root',
-            password: process.env.MYSQL_PASSWORD || 'PrintPrice123!',
-            database: process.env.MYSQL_DATABASE || 'ppos_preflight',
+            host: process.env.MYSQL_HOST || 'ppos-mysql',
+            user: process.env.MYSQL_USER || 'ppos_user',
+            password: process.env.MYSQL_PASSWORD || 'ppos_pass',
+            database: process.env.MYSQL_DATABASE || 'printprice_os',
             waitForConnections: true,
-            connectionLimit: process.env.MYSQL_POOL_SIZE || 20,
-            maxIdle: 10,
-            idleTimeout: 60000,
-            queueLimit: 0,
-            enableKeepAlive: true,
-            keepAliveInitialDelay: 0
+            connectionLimit: process.env.MYSQL_POOL_SIZE || 20
         };
+
+        // Diagnostic Trace (Phase 8 - Observability)
+        console.log(`[DB-INIT] Attempting connection. 
+          DATABASE_URL set: ${!!dbUrl}
+          MYSQL_HOST: ${process.env.MYSQL_HOST || 'DEFAULT(ppos-mysql)'}
+          MYSQL_USER: ${process.env.MYSQL_USER || 'DEFAULT(ppos_user)'}
+          MYSQL_DATABASE: ${process.env.MYSQL_DATABASE || 'DEFAULT(printprice_os)'}`);
 
         if (dbUrl) {
             console.log('[DB] Initializing pool from DATABASE_URL');
