@@ -28,8 +28,8 @@ COPY ppos-preflight-service ./
 RUN rm -rf node_modules package-lock.json libs
 
 # Step 4: Reroute package.json strictly to the mathematically perfect `.tgz` archives we built in Step 1
-RUN sed -i 's|"file:./libs/ppos-preflight-engine"|"file:../engine.tgz"|g' package.json
-RUN sed -i 's|"file:./libs/ppos-shared-infra"|"file:../infra.tgz"|g' package.json
+RUN sed -i -E 's|"file:.*ppos-preflight-engine"|"file:../engine.tgz"|g' package.json
+RUN sed -i -E 's|"file:.*ppos-shared-infra"|"file:../infra.tgz"|g' package.json
 
 # Step 5: Final pristine installation
 RUN npm install --only=production --no-audit
