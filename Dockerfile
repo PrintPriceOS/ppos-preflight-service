@@ -16,7 +16,10 @@ COPY ppos-shared-contracts ./ppos-preflight-service/libs/ppos-shared-contracts
 
 # Setup service
 WORKDIR /app/ppos-preflight-service
-COPY ppos-preflight-service/package.json ./
+COPY ppos-preflight-service ./
+
+# Destroy any leaked host node_modules to guarantee a clean slate
+RUN rm -rf node_modules package-lock.json
 
 # Pack local internal libraries into immutable tarballs
 RUN cd libs/ppos-preflight-engine && npm pack && mv *.tgz ../../engine.tgz
@@ -29,8 +32,6 @@ RUN sed -i 's|"file:./libs/ppos-shared-infra"|"file:./infra.tgz"|g' package.json
 
 # Standard installation (Node will extract tarballs natively as a real npm install)
 RUN npm install --only=production --no-audit
-
-COPY ppos-preflight-service ./
 
 # Environment configuration
 ENV PPOS_SERVICE_PORT=8001
