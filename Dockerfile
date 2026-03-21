@@ -11,11 +11,12 @@ WORKDIR /app
 
 # Satisfy local dependencies (Copied into external context for isolation)
 COPY ppos-preflight-engine ./ppos-preflight-service/libs/ppos-preflight-engine
+COPY ppos-shared-infra ./ppos-preflight-service/libs/ppos-shared-infra
 COPY ppos-shared-contracts ./ppos-preflight-service/libs/ppos-shared-contracts
 
 # Setup service
 WORKDIR /app/ppos-preflight-service
-COPY ppos-preflight-service/package*.json ./
+COPY ppos-preflight-service/package.json ./
 RUN npm install --only=production --no-audit --install-links
 
 COPY ppos-preflight-service ./
