@@ -1,7 +1,7 @@
 # @ppos/preflight-service Dockerfile
 FROM node:20-bookworm-slim
 
-# Install system dependencies (Ghostscript is required as engine is bundled)
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ghostscript \
     && apt-get clean \
@@ -9,28 +9,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Satisfy local dependencies (Copied into external context for isolation)
-COPY ppos-preflight-engine ./ppos-preflight-service/libs/ppos-preflight-engine
-COPY ppos-shared-infra ./ppos-preflight-service/libs/ppos-shared-infra
-COPY ppos-shared-contracts ./ppos-preflight-service/libs/ppos-shared-contracts
+# Step 1: Securely stage the GUARANTEED FRESH source code from the monorepo root
+# This bypasses any nested, outdated 'libs' folders sneaking in from the host side
+COPY ppos-preflight-engine ./staged-libs/ppos-preflight-engine
+COPY ppos-shared-infra ./staged-libs/ppos-shared-infra
+COPY ppos-shared-contracts ./staged-libs/ppos-shared-contracts
 
-# Setup service
+# Pack them into immutable tarballs
+RUN cd staged-libs/ppos-preflight-engine && npm pack && mv *.tgz /app/engine.tgz
+RUN cd staged-libs/ppos-shared-infra && npm pack && mv *.tgz /app/infra.tgz
+RUN cd staged-libs/ppos-shared-contracts && npm pack && mv *.tgz /app/contracts.tgz
+
+# Step 2: Bring in the service source code from the host
 WORKDIR /app/ppos-preflight-service
 COPY ppos-preflight-service ./
 
-# Destroy any leaked host node_modules to guarantee a clean slate
-RUN rm -rf node_modules package-lock.json
+# Step 3: Purgatory - ANNIHILATE any host artifacts (node_modules, old libs) that leaked through broken .dockerignores
+RUN rm -rf node_modules package-lock.json libs
 
-# Pack local internal libraries into immutable tarballs
-RUN cd libs/ppos-preflight-engine && npm pack && mv *.tgz ../../engine.tgz
-RUN cd libs/ppos-shared-infra && npm pack && mv *.tgz ../../infra.tgz
-RUN cd libs/ppos-shared-contracts && npm pack && mv *.tgz ../../contracts.tgz
+# Step 4: Reroute package.json strictly to the mathematically perfect `.tgz` archives we built in Step 1
+RUN sed -i 's|"file:./libs/ppos-preflight-engine"|"file:../engine.tgz"|g' package.json
+RUN sed -i 's|"file:./libs/ppos-shared-infra"|"file:../infra.tgz"|g' package.json
 
-# Reroute package.json strictly to the packed tarballs to bypass all symlink bugs
-RUN sed -i 's|"file:./libs/ppos-preflight-engine"|"file:./engine.tgz"|g' package.json
-RUN sed -i 's|"file:./libs/ppos-shared-infra"|"file:./infra.tgz"|g' package.json
-
-# Standard installation (Node will extract tarballs natively as a real npm install)
+# Step 5: Final pristine installation
 RUN npm install --only=production --no-audit
 
 # Environment configuration
