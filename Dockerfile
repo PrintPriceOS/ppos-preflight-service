@@ -17,7 +17,7 @@ COPY ppos-shared-contracts ./ppos-preflight-service/libs/ppos-shared-contracts
 # Setup service
 WORKDIR /app/ppos-preflight-service
 COPY ppos-preflight-service/package.json ./
-RUN npm install --only=production --no-audit --install-links
+RUN npm install --only=production --no-audit
 
 COPY ppos-preflight-service ./
 
