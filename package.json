@@ -12,7 +12,7 @@
     "@fastify/cors": "^8.3.0",
     "@fastify/helmet": "^11.0.0",
     "@fastify/multipart": "^8.0.0",
-    "@ppos/preflight-engine": "file:./libs/ppos-preflight-engine",
+    "@ppos/preflight-engine": "file:../ppos-preflight-engine",
     "axios": "^1.6.0",
     "bullmq": "^5.71.0",
     "dotenv": "^17.3.1",
