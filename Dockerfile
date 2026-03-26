@@ -1,11 +1,10 @@
-# @ppos/preflight-service - Hardened v2.3
+# @ppos/preflight-service - Hardened v2.4
 # Multi-stage build for clean production images
 
 # Stage 1: Build & Pack internal dependencies
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /build
-# These must be present in the umbrella root build context
 COPY ppos-preflight-engine ./ppos-preflight-engine
 COPY ppos-shared-infra ./ppos-shared-infra
 COPY ppos-shared-contracts ./ppos-shared-contracts
@@ -15,33 +14,34 @@ RUN cd ppos-shared-infra && npm pack && mv *.tgz ../infra.tgz
 RUN cd ppos-shared-contracts && npm pack && mv *.tgz ../contracts.tgz
 
 # Stage 2: Prepare & Install Service
+FROM node:20-bookworm-slim AS installer
+
 WORKDIR /app
 COPY ppos-preflight-service/package*.json ./
 COPY --from=builder /build/*.tgz ./
 
-# Patch package.json with the generated tarballs
 RUN sed -i 's|"file:../ppos-preflight-engine"|"file:./engine.tgz"|g' package.json && \
     sed -i 's|"file:../ppos-shared-infra"|"file:./infra.tgz"|g' package.json && \
     sed -i 's|"file:../ppos-shared-contracts"|"file:./contracts.tgz"|g' package.json
 
-# Production install - ignores devDeps and uses clean state
-RUN npm install --only=production --no-audit
+RUN npm install --omit=dev --no-audit
 
 # Stage 3: Final Production Runtime
-FROM node:20-bookworm-slim
-RUN apt-get update && apt-get install -y ghostscript && apt-get clean && rm -rf /var/lib/apt/lists/*
+FROM node:20-bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends ghostscript && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-# 1. Bring in pre-installed node_modules and patched package.json metadata
-COPY --from=builder /app ./
 
-# 2. Bring in source code
-# Note: This overwrites package.json with the local copy. We'll fix it in the next step.
+# Bring in installed deps + patched metadata
+COPY --from=installer /app ./
+
+# Bring in service source
 COPY ppos-preflight-service/ ./
 
-# 3. Restore the patched package.json to ensure runtime metadata consistency 
-# so 'npm list' and other tools see the correct tarball references.
-COPY --from=builder /app/package.json ./package.json
+# Restore patched package.json so runtime metadata stays aligned
+COPY --from=installer /app/package.json ./package.json
 
 ENV NODE_ENV=production
 ENV PPOS_SERVICE_PORT=8001
