@@ -241,12 +241,6 @@ async function preflightRoutes(fastify, options) {
         });
     });
 
-    fastify.post('/autofix', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
-        console.warn(`[PRELIGHT][DEPRECATED] POST /autofix used. Use /jobs/:id/actions/fix instead.`);
-        return reply.status(308).header('Location', '/api/preflight/jobs/:id/actions/fix').send({ 
-            error: 'DEPRECATED', message: 'Use /api/preflight/jobs/:id/actions/fix instead.' 
-        });
-    });
 }
 
 module.exports = preflightRoutes;
