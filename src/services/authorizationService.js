@@ -40,24 +40,29 @@ class AuthorizationService {
      * @param {string} requiredScope - Scope being requested
      */
     isAuthorized(context, requiredScope) {
-        const { auth, deployment } = context;
+        const { auth } = context;
         
-        if (!auth || !auth.role) return false;
+        if (!auth) return false;
 
-        // Normalize role to lowercase for lookup
-        const normalizedRole = auth.role.toLowerCase();
-
-        // Wildcard scopes (e.g. ['*'] from admin JWT)
-        if (Array.isArray(auth.scopes) && auth.scopes.includes('*')) return true;
-
-        // 1. Role-based Scope Validation
-        const userScopes = ROLE_SCOPES[normalizedRole] || [];
-        if (!userScopes.includes(requiredScope)) {
-            return false;
+        // 1. Direct JWT Scope Validation (Highest Precedence)
+        if (Array.isArray(auth.scopes)) {
+            // Wildcard support
+            if (auth.scopes.includes('*')) return true;
+            // Exact match support
+            if (auth.scopes.includes(requiredScope)) return true;
         }
 
-        // 2. Deployment Contract-Aware Governance Logic
-        return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
+        // 2. Role-based Scope Fallback
+        if (!auth.role) return false;
+        const normalizedRole = auth.role.toLowerCase();
+        const userScopes = ROLE_SCOPES[normalizedRole] || [];
+        
+        if (userScopes.includes(requiredScope)) {
+             // 3. Deployment Contract-Aware Governance Logic
+             return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
+        }
+
+        return false;
     }
 
     /**

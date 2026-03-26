@@ -13,6 +13,8 @@
     "@fastify/helmet": "^11.0.0",
     "@fastify/multipart": "^8.0.0",
     "@ppos/preflight-engine": "file:../ppos-preflight-engine",
+    "@ppos/shared-infra": "file:../ppos-shared-infra",
+    "@ppos/shared-contracts": "file:../ppos-shared-contracts",
     "axios": "^1.6.0",
     "bullmq": "^5.71.0",
     "dotenv": "^17.3.1",

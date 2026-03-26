@@ -25,7 +25,10 @@ class PreflightService {
         const idempotencyKey = contextRequest.headers?.['idempotency-key'];
         if (idempotencyKey) {
             const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
-            if (existing) return { jobId: existing.id, status: 'QUEUED', reused: true };
+            if (existing) {
+                console.log(`[PRELIGHT][JOBS] Reusing existing job for idempotency key: ${idempotencyKey}`);
+                return { jobId: existing.id, status: 'QUEUED', reused: true };
+            }
         }
 
         const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -54,10 +57,11 @@ class PreflightService {
         }
 
         // 3. PERSIST INITIAL STATE (Phase 3)
+        console.log(`[PRELIGHT][JOBS] Creating job: ${jobId} (Tenant: ${tenantId})`);
         await db.execute(
-            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, input_bytes) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [jobId, tenantId, deployment.deploymentId, auth.userId, 'ANALYZE', 'PROCESSING', stats.size],
+            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, input_bytes, idempotency_key) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [jobId, tenantId, deployment.deploymentId, auth.userId, 'ANALYZE', 'PROCESSING', stats.size, idempotencyKey],
             { tenantId, requestId: contextRequest.requestId }
         );
 
@@ -134,7 +138,18 @@ class PreflightService {
              type: 'AUTOFIX'
         });
 
+        // Idempotency Check (BUG FIX: idempotencyKey was undefined)
+        const idempotencyKey = contextRequest.headers?.['idempotency-key'];
+        if (idempotencyKey) {
+            const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
+            if (existing) {
+                console.log(`[PRELIGHT][JOBS] Reusing existing job for idempotency key: ${idempotencyKey}`);
+                return { jobId: existing.id, status: 'QUEUED', reused: true };
+            }
+        }
+
         // 1. PERSIST INITIAL STATE
+        console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
              `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -197,6 +212,55 @@ class PreflightService {
             ok: true,
             jobId,
             previews: [{ page: 1, url: `/api/preflight/preview/${jobId}/1` }]
+        };
+    }
+    /**
+     * Retrieves the status of a job from the database.
+     */
+    async getJobStatus(jobId, context) {
+        const { auth } = context;
+        console.log(`[PRELIGHT][JOBS] Querying status for job: ${jobId}`);
+        
+        const [job] = await db.query(
+            "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?", 
+            [jobId, auth.tenantId]
+        );
+
+        if (!job) return null;
+
+        // Map internal result string to object if necessary
+        let result = job.result;
+        if (typeof result === 'string') {
+            try { result = JSON.parse(result); } catch (e) {}
+        }
+
+        return {
+            id: job.id,
+            status: job.status,
+            type: job.job_type,
+            progress: job.progress || 0,
+            result: result || {},
+            error: job.error || null,
+            createdAt: job.created_at
+        };
+    }
+
+    /**
+     * Retrieves the active preflight policies.
+     */
+    async getPolicies(context) {
+        console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${context.auth?.tenantId}`);
+        const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
+        
+        // Transform internal policy format to canonical contract
+        return {
+            policies: [
+                {
+                    id: effectivePolicy.id || 'default_policy',
+                    name: effectivePolicy.name || 'Standard Preflight Policy',
+                    rules: effectivePolicy.rules || []
+                }
+            ]
         };
     }
 }

@@ -1,54 +1,47 @@
-# @ppos/preflight-service - Hardened v2.2
+# @ppos/preflight-service - Hardened v2.3
+# Multi-stage build for clean production images
+
+# Stage 1: Build & Pack internal dependencies
 FROM node:20-bookworm-slim AS builder
 
-# Install system dependencies for build stage if needed
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 build-essential \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /build
-
-# 1. Stage and pack internal dependencies
-# Note: These must be present in the build context (root)
+# These must be present in the umbrella root build context
 COPY ppos-preflight-engine ./ppos-preflight-engine
 COPY ppos-shared-infra ./ppos-shared-infra
 COPY ppos-shared-contracts ./ppos-shared-contracts
-# COPY ppos-core-platform ./ppos-core-platform # Use if needed
 
 RUN cd ppos-preflight-engine && npm pack && mv *.tgz ../engine.tgz
 RUN cd ppos-shared-infra && npm pack && mv *.tgz ../infra.tgz
 RUN cd ppos-shared-contracts && npm pack && mv *.tgz ../contracts.tgz
-# RUN cd ppos-core-platform && npm pack && mv *.tgz ../platform.tgz
 
-# 2. Prepare the service
+# Stage 2: Prepare & Install Service
 WORKDIR /app
 COPY ppos-preflight-service/package*.json ./
 COPY --from=builder /build/*.tgz ./
 
-# Patch package.json to use tarballs
-RUN sed -i 's|"file:../ppos-preflight-engine"|"file:./engine.tgz"|g' package.json
-RUN sed -i 's|"file:../ppos-shared-infra"|"file:./infra.tgz"|g' package.json
-RUN sed -i 's|"file:../ppos-shared-contracts"|"file:./contracts.tgz"|g' package.json
+# Patch package.json with the generated tarballs
+RUN sed -i 's|"file:../ppos-preflight-engine"|"file:./engine.tgz"|g' package.json && \
+    sed -i 's|"file:../ppos-shared-infra"|"file:./infra.tgz"|g' package.json && \
+    sed -i 's|"file:../ppos-shared-contracts"|"file:./contracts.tgz"|g' package.json
 
-# Clean install
+# Production install - ignores devDeps and uses clean state
 RUN npm install --only=production --no-audit
 
-# 3. Final Production Stage
+# Stage 3: Final Production Runtime
 FROM node:20-bookworm-slim
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ghostscript \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ghostscript && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+# 1. Bring in pre-installed node_modules and patched package.json metadata
 COPY --from=builder /app ./
-# Normalize contract location by extracting the tarball
-RUN mkdir -p ppos-shared-contracts && \
-    tar -xzf contracts.tgz -C ppos-shared-contracts --strip-components=1 && \
-    rm contracts.tgz
+
+# 2. Bring in source code
+# Note: This overwrites package.json with the local copy. We'll fix it in the next step.
 COPY ppos-preflight-service/ ./
+
+# 3. Restore the patched package.json to ensure runtime metadata consistency 
+# so 'npm list' and other tools see the correct tarball references.
+COPY --from=builder /app/package.json ./package.json
 
 ENV NODE_ENV=production
 ENV PPOS_SERVICE_PORT=8001
