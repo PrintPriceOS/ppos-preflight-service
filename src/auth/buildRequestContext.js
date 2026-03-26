@@ -27,8 +27,8 @@ module.exports = async (request, reply) => {
     if (request.url.startsWith('/health') || request.url.startsWith('/api/auth')) return;
 
     try {
-        // Load deployment context (cached after first call)
-        const deployment = await loadDeploymentContext();
+        // Load deployment contract (Phase 10 Hardened Strategy)
+        const { contract: deployment } = loadDeploymentContext();
         request.context.deployment = deployment;
 
         // Extract and verify JWT

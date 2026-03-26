@@ -1,10 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ppos-dev-only-secret-2026';
-const JWT_PUBLIC_KEY = process.env.JWT_PUBLIC_KEY;
-const JWT_ISSUER = process.env.JWT_ISSUER || 'https://auth.printprice.pro';
-const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'ppos:control';
-const JWT_ALGO = process.env.JWT_ALGORITHM || 'HS256';
+const { jwt: security } = require('../config/security');
 
 /**
  * Verifies the integrity and contents of a JWT.
@@ -12,23 +8,23 @@ const JWT_ALGO = process.env.JWT_ALGORITHM || 'HS256';
  * @returns {object} decoded token
  */
 function verifyJwt(token) {
-    const secretOrKey = JWT_ALGO.startsWith('RS') ? JWT_PUBLIC_KEY : JWT_SECRET;
+    const secretOrKey = security.algorithms[0].startsWith('RS') ? security.publicKey : security.secret;
     
     if (!secretOrKey) {
-        throw new Error(`[AUTH-CONFIG-ERROR] Missing secret/key for algorithm ${JWT_ALGO}`);
+        throw new Error(`[AUTH-CONFIG-ERROR] Missing secret/key for algorithm ${security.algorithms[0]}`);
     }
 
     try {
         return jwt.verify(token, secretOrKey, {
-            algorithms: [JWT_ALGO],
-            issuer: JWT_ISSUER,
-            audience: JWT_AUDIENCE
+            algorithms: security.algorithms,
+            issuer: security.issuer,
+            audience: security.audience
         });
     } catch (err) {
         console.error(`[PPOS-JWT-ERROR] Validation failed: ${err.message}`, {
-            issuerExpected: JWT_ISSUER,
-            audienceExpected: JWT_AUDIENCE,
-            algo: JWT_ALGO
+            issuerExpected: security.issuer,
+            audienceExpected: security.audience,
+            algo: security.algorithms[0]
         });
         throw new Error(`Invalid JWT: ${err.message}`);
     }

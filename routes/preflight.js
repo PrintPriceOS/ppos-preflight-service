@@ -151,31 +151,6 @@ async function preflightRoutes(fastify, options) {
         }
     });
 
-    /**
-     * POST /autofix
-     */
-    fastify.post('/autofix', { 
-        preHandler: [requireScope('preflight:write')],
-        bodyLimit: MAX_FILE_SIZE
-    }, async (request, reply) => {
-        try {
-            const { auth } = request.context;
-            if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
-
-            const { asset_id, policy, ...rest } = request.body || {};
-            const fixPlan = { ...(policy || {}), ...rest };
-            const result = await service.autofix(asset_id, fixPlan, request.context, request.body);
-            return { ok: true, ...result };
-        } catch (err) {
-            if (err.isPolicyViolation) {
-                return reply.status(err.code === 'DEPLOYMENT_CONSTRAINT_BLOCKED' ? 429 : 403).send({
-                    error: err.code,
-                    message: err.message
-                });
-            }
-            throw err;
-        }
-    });
 
     /**
      * GET /api/preflight/jobs/:id
@@ -234,10 +209,15 @@ async function preflightRoutes(fastify, options) {
      */
     fastify.post('/analyze', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
         console.warn(`[PRELIGHT][DEPRECATED] POST /analyze used. Redirecting to /jobs.`);
-        // Note: For multipart redirects are tricky in Fastify, better to just call the logic or return 410.
-        // We will call the logic for backward compatibility.
         return reply.status(308).header('Location', '/api/preflight/jobs').send({ 
             error: 'DEPRECATED', message: 'Use /api/preflight/jobs instead.' 
+        });
+    });
+
+    fastify.post('/autofix', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
+        console.warn(`[PRELIGHT][DEPRECATED] POST /autofix used. Redirecting to /jobs/:id/actions/fix.`);
+        return reply.status(308).header('Location', '/api/preflight/jobs/:id/actions/fix').send({ 
+            error: 'DEPRECATED', message: 'Use /api/preflight/jobs/:id/actions/fix instead.' 
         });
     });
 
