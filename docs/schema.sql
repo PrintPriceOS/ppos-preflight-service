@@ -29,12 +29,14 @@ CREATE TABLE IF NOT EXISTS jobs (
     user_id VARCHAR(64),
     job_type ENUM('ANALYZE', 'AUTOFIX') NOT NULL,
     status ENUM('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED', 'FIXED') DEFAULT 'QUEUED',
+    idempotency_key VARCHAR(255) NULL,
     input_bytes BIGINT DEFAULT 0,
     output_bytes BIGINT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_tenant_deployment (tenant_id, deployment_id),
-    INDEX idx_status (status)
+    INDEX idx_status (status),
+    INDEX idx_jobs_idempotency_tenant (tenant_id, idempotency_key)
 );
 
 -- 4. Usage Events (For billing and quota enforcement)
