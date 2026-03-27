@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const OwnershipValidator = require('../src/auth/ownershipValidator');
 const requireScope = require('../src/middleware/requireScope');
+const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 
 const engineModule = require('@ppos/preflight-engine');
 const engineInstance = engineModule.createStandardEngine();
@@ -91,11 +92,24 @@ async function preflightRoutes(fastify, options) {
         bodyLimit: MAX_FILE_SIZE
     }, async (request, reply) => {
         try {
-            const { id } = request.params;
+            const routeId = request.params?.id;
+            const bodyAssetId = (!request.isMultipart() && request.body) ? request.body.asset_id : null;
+            
+            // Resolve targetId with deterministic fallback and mismatch detection
+            const targetId = routeId || bodyAssetId;
+
+            if (!targetId) {
+                throw new PPOSError(ErrorCodes.BAD_REQUEST, 'Missing target job/asset identifier.', ErrorTypes.USER_ERROR);
+            }
+
+            if (routeId && bodyAssetId && routeId !== bodyAssetId) {
+                throw new PPOSError(ErrorCodes.BAD_REQUEST, 'Route id and body asset_id do not match. Identity ambiguity rejected.', ErrorTypes.USER_ERROR);
+            }
+
             const { auth } = request.context;
             if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
 
-            console.log(`[PRELIGHT][JOBS] POST /jobs/${id}/actions/fix - Payload received`);
+            console.log(`[PRELIGHT][JOBS] POST /jobs/${targetId}/actions/fix - Payload received`);
 
             if (request.isMultipart()) {
                 const parts = request.file();
@@ -105,8 +119,9 @@ async function preflightRoutes(fastify, options) {
                 const buffer = await data.toBuffer();
                 const jobId = `sync_fix_${Date.now()}`;
 
-                // Initialize isolated storage
-                await storage.initializeJobStorage(request.context, jobId);
+                // Initialize isolated storage using normalized context
+                const storageContext = service._normalizeStorageContext(request.context);
+                await storage.initializeJobStorage(storageContext, jobId);
                 const { filePath } = await storage.saveInputFile(auth.tenantId, jobId, buffer, data.filename);
 
                 // Extract Fix Plan from Fields
@@ -134,18 +149,18 @@ async function preflightRoutes(fastify, options) {
                 return reply.status(500).send({ error: 'AUTOFIX_EXECUTION_FAILED', message: result.error });
             } else {
                 // Async enqueue via JSON body
-                const { asset_id, policy, ...rest } = request.body || {};
-                const fixPlan = { ...(policy || {}), ...rest };
+                const { policy, ...rest } = request.body || {};
+                const options = rest || {};
                 const result = await service.autofix(
-                    asset_id,
-                    fixPlan,
+                    targetId,
+                    policy,
                     { ...request.context, request },
-                    request.body
+                    options
                 );
                 return { ok: true, ...result };
             }
         } catch (err) {
-            console.error(`[PRELIGHT][ERROR] POST /jobs/:id/actions/fix - ${err.message}`);
+            console.error(`[PRELIGHT][ERROR] POST /jobs/:targetId/actions/fix - ${err.message}`);
             if (err.isPolicyViolation) {
                 return reply.status(err.code === 'DEPLOYMENT_CONSTRAINT_BLOCKED' ? 429 : 403).send({
                     error: err.code,

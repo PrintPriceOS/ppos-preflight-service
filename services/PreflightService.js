@@ -17,6 +17,43 @@ class PreflightService {
         this.storage = storage;
     }
 
+    /**
+     * Internal helper to normalize context for storage operations.
+     */
+    _normalizeStorageContext(context) {
+        const { auth, deployment } = context || {};
+        if (!auth?.tenantId || !deployment?.deploymentId) {
+            throw new PPOSError(ErrorCodes.UNAUTHORIZED, 'Invalid context for storage: missing tenantId or deploymentId', ErrorTypes.SERVICE_ERROR);
+        }
+        return {
+            tenantId: auth.tenantId,
+            deploymentId: deployment.deploymentId,
+            tenantIsolation: deployment.tenantIsolation || 'logical'
+        };
+    }
+
+    /**
+     * Internal helper to resolve the canonical input PDF path for a job.
+     */
+    async _resolveCanonicalInputPdf(tenantId, jobId, type = 'JOB') {
+        try {
+            const inputDir = this.storage.getJobSubfolder(tenantId, jobId, 'input');
+            if (!(await fs.pathExists(inputDir))) {
+                throw new Error(`Input directory missing: ${inputDir}`);
+            }
+            const files = await fs.readdir(inputDir);
+            const fileName = files.find(f => f.toLowerCase().endsWith('.pdf'));
+            if (!fileName) {
+                throw new Error(`No PDF found in input subfolder for ${type} ${jobId}`);
+            }
+            return path.join(inputDir, fileName);
+        } catch (err) {
+            const errCode = type === 'AUTOFIX' ? 'AUTOFIX-INPUT-ERROR' : 'ANALYZE-INPUT-ERROR';
+            console.error(`[${errCode}] ${err.message} (jobId=${jobId}, tenantId=${tenantId})`);
+            throw new PPOSError(ErrorCodes.NOT_FOUND, `[${errCode}] No input PDF found for jobId=${jobId} tenantId=${tenantId}`, ErrorTypes.SERVICE_ERROR);
+        }
+    }
+
     async analyze(fileStream, filename, context, options = {}) {
         const { auth, deployment, request: contextRequest } = context;
         if (!auth || !auth.tenantId) {
@@ -38,9 +75,10 @@ class PreflightService {
 
         // --- Phase 4: Runtime Governance (Pre-Job Enforcement) ---
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
-        
+
         // Initial staging to check file size (temporarily staged)
-        await this.storage.initializeJobStorage(context, jobId);
+        const storageContext = this._normalizeStorageContext(context);
+        await this.storage.initializeJobStorage(storageContext, jobId);
         const { filePath } = await this.storage.saveInputFile(tenantId, jobId, fileStream, filename);
         const stats = await require('fs-extra').stat(filePath);
 
@@ -50,12 +88,12 @@ class PreflightService {
                 type: 'ANALYZE'
             });
         } catch (err) {
-             if (err.isPolicyViolation) {
-                 // Cleanup before throwing
-                 await this.storage.deleteJobStorage(tenantId, jobId);
-                 throw err;
-             }
-             throw err;
+            if (err.isPolicyViolation) {
+                // Cleanup before throwing
+                await this.storage.deleteJobStorage(tenantId, jobId);
+                throw err;
+            }
+            throw err;
         }
 
         // 3. PERSIST INITIAL STATE (Phase 3)
@@ -77,8 +115,8 @@ class PreflightService {
 
         // 4. Decide: Synchronous Engine vs Asynchronous Worker
         if (stats.size < 5 * 1024 * 1024) { // < 5MB sync
-            const report = await this.engine.analyze(filePath, { 
-                tenantId, 
+            const report = await this.engine.analyze(filePath, {
+                tenantId,
                 jobId,
                 outputDir: this.storage.getJobSubfolder(tenantId, jobId, 'output')
             });
@@ -92,7 +130,9 @@ class PreflightService {
 
             return report;
         } else {
-            // Phase 2: Normalized Job Envelope
+            // Phase 2: Normalized Job Envelope (V2 Canonical)
+            const fileUrl = await this._resolveCanonicalInputPdf(tenantId, jobId, 'ANALYZE');
+            
             const jobEnvelope = {
                 jobId,
                 tenantId,
@@ -100,26 +140,28 @@ class PreflightService {
                 deploymentId: deployment.deploymentId,
                 tenantIsolation: deployment.tenantIsolation,
                 serviceTier: deployment.serviceTier,
-                payload: {
-                    filePath,
-                    options: {
-                        storage: {
-                            base: this.storage.getJobPath(tenantId, jobId),
-                            input: filePath
-                        }
+                input: {
+                    fileUrl,
+                    specs: {
+                        options: options
                     }
-                }
+                },
+                trace: {
+                    requestId: contextRequest.requestId || context.requestId || 'unknown',
+                    traceparent: contextRequest.headers?.['traceparent'] || context.traceparent || null
+                },
+                contractMode: 'v2_emitted'
             };
 
             const result = await this.worker.enqueue('ANALYZE', jobEnvelope);
-            
+
             // Log enqueued status
             await db.execute("UPDATE jobs SET status = 'QUEUED' WHERE id = ?", [jobId]);
-            
+
             await auditLogger.log(context, {
-                 action: 'JOB_QUEUED',
-                 resourceType: 'JOB',
-                 resourceId: jobId
+                action: 'JOB_QUEUED',
+                resourceType: 'JOB',
+                resourceId: jobId
             });
 
             return result;
@@ -134,10 +176,15 @@ class PreflightService {
         const tenantId = auth.tenantId;
 
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
+        const storageContext = this._normalizeStorageContext(context);
+        
         await policyEngine.validateExecution(context, effectivePolicy, {
-             fileSize: options.fileSize || 0,
-             type: 'AUTOFIX'
+            fileSize: options.fileSize || 0,
+            type: 'AUTOFIX'
         });
+
+        // Ensure storage is initialized even if asset exists (for the new jobId)
+        await this.storage.initializeJobStorage(storageContext, jobId);
 
         const idempotencyKey = contextRequest?.headers?.['idempotency-key'];
         const safeRequestId = contextRequest?.requestId || context?.requestId || 'unknown';
@@ -149,48 +196,51 @@ class PreflightService {
             }
         }
 
-        // 1. Resolve Asset File Reference
-        const inputDir = this.storage.getJobSubfolder(tenantId, assetId, 'input');
-        const files = await fs.readdir(inputDir);
-        const fileName = files.find(f => f.endsWith('.pdf'));
-        if (!fileName) {
-            throw new PPOSError(ErrorCodes.NOT_FOUND, `Asset file not found for asset: ${assetId}`, ErrorTypes.SERVICE_ERROR);
-        }
-        const fileUrl = path.join(inputDir, fileName);
+        // 1. Resolve Asset File Reference (Fail Fast)
+        const fileUrl = await this._resolveCanonicalInputPdf(tenantId, assetId, 'AUTOFIX');
 
         // 2. PERSIST INITIAL STATE
         console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
-             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
+            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-             [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED', idempotencyKey],
-             { tenantId, requestId: safeRequestId }
+            [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED', idempotencyKey],
+            { tenantId, requestId: safeRequestId }
         );
 
         await auditLogger.log(context, {
-             action: 'AUTOFIX_ENQUEUED',
-             resourceType: 'JOB',
-             resourceId: jobId
+            action: 'AUTOFIX_ENQUEUED',
+            resourceType: 'JOB',
+            resourceId: jobId
         });
 
         // 3. Orchestrate canonical AUTOFIX envelope (Worker V2 Contract)
-        const jobEnvelope = { 
+        const resolvedPolicyProfile = effectivePolicy.id || policy.id || policy.profileId || 'default_autofix_profile';
+        
+        const jobEnvelope = {
             jobId,
             tenantId,
+            requestedBy: auth.userId,
+            deploymentId: deployment.deploymentId,
+            tenantIsolation: deployment.tenantIsolation,
+            serviceTier: deployment.serviceTier,
             input: {
                 fileUrl,
                 specs: {
-                    ...policy,
-                    ...options
+                    policy: policy,
+                    options: options
                 }
             },
-            policyProfile: effectivePolicy.id || 'default_autofix_profile',
+            policyProfile: resolvedPolicyProfile,
             trace: {
                 requestId: safeRequestId,
-                traceparent: contextRequest?.headers?.['traceparent'] || context?.traceparent
-            }
+                traceparent: contextRequest?.headers?.['traceparent'] || context?.traceparent || null
+            },
+            contractMode: 'v2_emitted'
         };
-        
+
+        console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${resolvedPolicyProfile})`);
+
         return await this.worker.enqueue('AUTOFIX', jobEnvelope);
     }
 
@@ -201,14 +251,9 @@ class PreflightService {
         const { auth } = context;
         const tenantId = auth.tenantId;
 
-        // 1. Retrieve input file
-        const jobPath = this.storage.getJobPath(tenantId, jobId);
-        const files = await fs.readdir(jobPath);
-        const inputFile = files.find(f => f.endsWith('.pdf'));
-        
-        if (!inputFile) throw new Error('Input PDF not found for previews.');
-        const inputPath = path.join(jobPath, inputFile);
-        
+        // 1. Retrieve input file (Search input subfolder)
+        const inputPath = await this._resolveCanonicalInputPdf(tenantId, jobId, 'PREVIEW');
+
         // 2. Prepare output dir
         const previewDir = this.storage.getJobSubfolder(tenantId, jobId, 'previews');
         await fs.ensureDir(previewDir);
@@ -229,9 +274,9 @@ class PreflightService {
     async getJobStatus(jobId, context) {
         const { auth } = context;
         console.log(`[PRELIGHT][JOBS] Querying status for job: ${jobId}`);
-        
+
         const [job] = await db.query(
-            "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?", 
+            "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?",
             [jobId, auth.tenantId]
         );
 
@@ -240,7 +285,7 @@ class PreflightService {
         // Map internal result string to object if necessary
         let result = job.result;
         if (typeof result === 'string') {
-            try { result = JSON.parse(result); } catch (e) {}
+            try { result = JSON.parse(result); } catch (e) { }
         }
 
         return {
@@ -260,7 +305,7 @@ class PreflightService {
     async getPolicies(context) {
         console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${context.auth?.tenantId}`);
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
-        
+
         // Transform internal policy format to canonical contract
         return {
             policies: [

@@ -32,7 +32,7 @@ class StorageManager {
      * Get a specific subfolder within a job's storage.
      */
     getJobSubfolder(tenantId, jobId, subfolder) {
-        const allowed = ['input', 'output', 'temp', 'reports'];
+        const allowed = ['input', 'output', 'temp', 'reports', 'previews'];
         if (!allowed.includes(subfolder)) {
             throw new Error(`[STORAGE-ERR] Invalid subfolder requested: ${subfolder}`);
         }
