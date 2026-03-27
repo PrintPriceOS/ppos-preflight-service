@@ -37,7 +37,7 @@ async function preflightRoutes(fastify, options) {
      * POST /api/preflight/jobs
      * Entry point for new analysis jobs.
      */
-    fastify.post('/jobs', { 
+    fastify.post('/jobs', {
         preHandler: [requireScope('preflight:write')],
         bodyLimit: MAX_FILE_SIZE
     }, async (request, reply) => {
@@ -50,8 +50,8 @@ async function preflightRoutes(fastify, options) {
             if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
 
             const result = await service.analyze(
-                await fileData.toBuffer(), 
-                fileData.filename, 
+                await fileData.toBuffer(),
+                fileData.filename,
                 request.context
             );
             return { ok: true, ...result };
@@ -71,8 +71,8 @@ async function preflightRoutes(fastify, options) {
      * GET /api/preflight/jobs/policies
      * RETURNS the active preflight policies.
      */
-    fastify.get('/jobs/policies', { 
-        preHandler: [requireScope('preflight:read')] 
+    fastify.get('/jobs/policies', {
+        preHandler: [requireScope('preflight:read')]
     }, async (request, reply) => {
         try {
             const policies = await service.getPolicies(request.context);
@@ -86,7 +86,7 @@ async function preflightRoutes(fastify, options) {
     /**
      * POST /jobs/:id/actions/fix
      */
-    fastify.post('/jobs/:id/actions/fix', { 
+    fastify.post('/jobs/:id/actions/fix', {
         preHandler: [requireScope('preflight:write')],
         bodyLimit: MAX_FILE_SIZE
     }, async (request, reply) => {
@@ -104,11 +104,11 @@ async function preflightRoutes(fastify, options) {
 
                 const buffer = await data.toBuffer();
                 const jobId = `sync_fix_${Date.now()}`;
-                
+
                 // Initialize isolated storage
                 await storage.initializeJobStorage(request.context, jobId);
                 const { filePath } = await storage.saveInputFile(auth.tenantId, jobId, buffer, data.filename);
-                
+
                 // Extract Fix Plan from Fields
                 const fixPlan = {
                     target: data.fields?.target?.value || 'cmyk',
@@ -124,7 +124,7 @@ async function preflightRoutes(fastify, options) {
 
                 // Execute Engine
                 const result = await engineInstance.autofixPdf(filePath, fixPlan);
-                
+
                 if (result.success) {
                     console.log(`[PRELIGHT][JOBS] Sync fix successful for job: ${jobId}`);
                     const fileBuffer = await fs.readFile(result.outputPath);
@@ -136,7 +136,12 @@ async function preflightRoutes(fastify, options) {
                 // Async enqueue via JSON body
                 const { asset_id, policy, ...rest } = request.body || {};
                 const fixPlan = { ...(policy || {}), ...rest };
-                const result = await service.autofix(asset_id, fixPlan, request.context, request.body);
+                const result = await service.autofix(
+                    asset_id,
+                    fixPlan,
+                    { ...request.context, request },
+                    request.body
+                );
                 return { ok: true, ...result };
             }
         } catch (err) {
@@ -162,9 +167,9 @@ async function preflightRoutes(fastify, options) {
             const jobStatus = await service.getJobStatus(jobId, request.context);
 
             if (!jobStatus) {
-                return reply.status(404).send({ 
-                    error: 'NOT_FOUND', 
-                    message: 'Job not found or access denied.' 
+                return reply.status(404).send({
+                    error: 'NOT_FOUND',
+                    message: 'Job not found or access denied.'
                 });
             }
 
@@ -196,7 +201,7 @@ async function preflightRoutes(fastify, options) {
         const { jobId, page } = request.params;
 
         const previewPath = path.join(storage.getJobSubfolder(auth.tenantId, jobId, 'previews'), `p${page}.png`);
-        
+
         if (!await fs.pathExists(previewPath)) {
             return reply.status(404).send({ error: 'PREVIEW_NOT_FOUND' });
         }
@@ -209,15 +214,15 @@ async function preflightRoutes(fastify, options) {
      */
     fastify.post('/analyze', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
         console.warn(`[PRELIGHT][DEPRECATED] POST /analyze used. Redirecting to /jobs.`);
-        return reply.status(308).header('Location', '/api/preflight/jobs').send({ 
-            error: 'DEPRECATED', message: 'Use /api/preflight/jobs instead.' 
+        return reply.status(308).header('Location', '/api/preflight/jobs').send({
+            error: 'DEPRECATED', message: 'Use /api/preflight/jobs instead.'
         });
     });
 
     fastify.post('/autofix', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
         console.warn(`[PRELIGHT][DEPRECATED] POST /autofix used. Redirecting to /jobs/:id/actions/fix.`);
-        return reply.status(308).header('Location', '/api/preflight/jobs/:id/actions/fix').send({ 
-            error: 'DEPRECATED', message: 'Use /api/preflight/jobs/:id/actions/fix instead.' 
+        return reply.status(308).header('Location', '/api/preflight/jobs/:id/actions/fix').send({
+            error: 'DEPRECATED', message: 'Use /api/preflight/jobs/:id/actions/fix instead.'
         });
     });
 

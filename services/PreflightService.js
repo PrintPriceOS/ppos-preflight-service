@@ -125,21 +125,20 @@ class PreflightService {
     }
 
     async autofix(assetId, policy, context, options = {}) {
-        const { auth, deployment, request: contextRequest } = context;
+        const { auth, deployment, request: contextRequest } = context || {};
         if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for autofix.');
-        
+
         const jobId = `fix_${Date.now()}`;
         const tenantId = auth.tenantId;
 
-        // --- Phase 4: Runtime Governance ---
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
         await policyEngine.validateExecution(context, effectivePolicy, {
              fileSize: options.fileSize || 0,
              type: 'AUTOFIX'
         });
 
-        // Idempotency Check (BUG FIX: idempotencyKey was undefined)
-        const idempotencyKey = contextRequest.headers?.['idempotency-key'];
+        const idempotencyKey = contextRequest?.headers?.['idempotency-key'];
+        const safeRequestId = contextRequest?.requestId || context?.requestId || 'unknown';
         if (idempotencyKey) {
             const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
             if (existing) {
@@ -154,7 +153,7 @@ class PreflightService {
              `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
              [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED', idempotencyKey],
-             { tenantId, requestId: contextRequest.requestId }
+             { tenantId, requestId: safeRequestId }
         );
 
         await auditLogger.log(context, {
@@ -171,7 +170,7 @@ class PreflightService {
             deploymentId: deployment.deploymentId,
             tenantIsolation: deployment.tenantIsolation,
             serviceTier: deployment.serviceTier,
-            headers: contextRequest.headers, // PROPAGATE TRACE
+            headers: contextRequest?.headers, // PROPAGATE TRACE
             payload: {
                 assetId, 
                 policy,
