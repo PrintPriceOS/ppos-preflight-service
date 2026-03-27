@@ -2,6 +2,8 @@ const db = require('../src/services/db');
 const policyEngine = require('../src/services/policyEngine');
 const auditLogger = require('../src/services/auditLogger');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
+const path = require('path');
+const fs = require('fs-extra');
 
 /**
  * PreflightService
@@ -147,7 +149,16 @@ class PreflightService {
             }
         }
 
-        // 1. PERSIST INITIAL STATE
+        // 1. Resolve Asset File Reference
+        const inputDir = this.storage.getJobSubfolder(tenantId, assetId, 'input');
+        const files = await fs.readdir(inputDir);
+        const fileName = files.find(f => f.endsWith('.pdf'));
+        if (!fileName) {
+            throw new PPOSError(ErrorCodes.NOT_FOUND, `Asset file not found for asset: ${assetId}`, ErrorTypes.SERVICE_ERROR);
+        }
+        const fileUrl = path.join(inputDir, fileName);
+
+        // 2. PERSIST INITIAL STATE
         console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
              `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
@@ -162,19 +173,21 @@ class PreflightService {
              resourceId: jobId
         });
 
-        // Orchestrate autofix job
+        // 3. Orchestrate canonical AUTOFIX envelope (Worker V2 Contract)
         const jobEnvelope = { 
             jobId,
-            tenantId: auth.tenantId,
-            requestedBy: auth.userId,
-            deploymentId: deployment.deploymentId,
-            tenantIsolation: deployment.tenantIsolation,
-            serviceTier: deployment.serviceTier,
-            headers: contextRequest?.headers, // PROPAGATE TRACE
-            payload: {
-                assetId, 
-                policy,
-                ...options
+            tenantId,
+            input: {
+                fileUrl,
+                specs: {
+                    ...policy,
+                    ...options
+                }
+            },
+            policyProfile: effectivePolicy.id || 'default_autofix_profile',
+            trace: {
+                requestId: safeRequestId,
+                traceparent: contextRequest?.headers?.['traceparent'] || context?.traceparent
             }
         };
         
@@ -190,9 +203,6 @@ class PreflightService {
 
         // 1. Retrieve input file
         const jobPath = this.storage.getJobPath(tenantId, jobId);
-        // Find the input file in the job's storage (assuming it's fixed name or we search)
-        const fs = require('fs-extra');
-        const path = require('path');
         const files = await fs.readdir(jobPath);
         const inputFile = files.find(f => f.endsWith('.pdf'));
         
