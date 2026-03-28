@@ -95,7 +95,7 @@ class AuditLogger {
             resourceType: 'POLICY_ENGINE',
             resourceId: code,
             governanceSnapshot: snapshot,
-            ip: context.request?.ip || '0.0.0.0'
+            ip: context?.request?.ip || '0.0.0.0'
         });
     }
 
@@ -107,7 +107,7 @@ class AuditLogger {
             action: `AUTH_${status.toUpperCase()}`,
             resourceType: 'IDENTITY_SERVICE',
             resourceId: status,
-            ip: context.request?.ip || '0.0.0.0'
+            ip: context?.request?.ip || '0.0.0.0'
         });
     }
 

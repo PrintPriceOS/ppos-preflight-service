@@ -9,16 +9,18 @@ const auditLogger = require('../services/auditLogger');
  * After auth, attaches a normalized object to req.context.
  */
 module.exports = async (request, reply) => {
-    const requestId = requestTracer.getOrCreateRequestId(request.headers);
+    const safeHeaders = request?.headers || {};
+    const requestId = requestTracer.getOrCreateRequestId(safeHeaders);
+    
     request.context = {
         request: { 
             requestId,
-            ip: request.ip,
-            userAgent: request.headers['user-agent'],
+            ip: request?.ip || '127.0.0.1',
+            userAgent: safeHeaders['user-agent'] || 'unknown',
             headers: {
-                'idempotency-key': request.headers['idempotency-key'],
-                'x-request-id': request.headers['x-request-id'] || requestId,
-                'x-job-id': request.headers['x-job-id']
+                'idempotency-key': safeHeaders['idempotency-key'],
+                'x-request-id': safeHeaders['x-request-id'] || requestId,
+                'x-job-id': safeHeaders['x-job-id']
             }
         }
     };
@@ -32,7 +34,7 @@ module.exports = async (request, reply) => {
         request.context.deployment = deployment;
 
         // Extract and verify JWT
-        const authHeader = request.headers['authorization'];
+        const authHeader = safeHeaders['authorization'];
         if (authHeader && authHeader.startsWith('Bearer ')) {
             const token = authHeader.split(' ')[1];
             try {
@@ -55,8 +57,8 @@ module.exports = async (request, reply) => {
                 auditLogger.log(request.context, { 
                     action: 'AUTH_SUCCESS', 
                     resourceType: 'IDENTITY_SERVICE',
-                    ip: request.ip,
-                    userAgent: request.headers['user-agent']
+                    ip: request?.ip || '127.0.0.1',
+                    userAgent: safeHeaders['user-agent'] || 'unknown'
                 });
                 
                 return; // Success
@@ -67,8 +69,8 @@ module.exports = async (request, reply) => {
                 auditLogger.log(request.context, { 
                     action: 'AUTH_FAILURE', 
                     resourceType: 'IDENTITY_SERVICE',
-                    ip: request.ip,
-                    userAgent: request.headers['user-agent']
+                    ip: request?.ip || '127.0.0.1',
+                    userAgent: safeHeaders['user-agent'] || 'unknown'
                 });
 
                 return reply.status(401).send({ error: 'INVALID_TOKEN', message: err.message });
@@ -77,7 +79,7 @@ module.exports = async (request, reply) => {
 
         // Legacy Auth Path
         const ALLOW_LEGACY = process.env.ALLOW_LEGACY_AUTH === 'true';
-        const legacyKey = request.headers['x-ppos-api-key'];
+        const legacyKey = safeHeaders['x-ppos-api-key'];
         if (ALLOW_LEGACY && legacyKey && legacyKey === process.env.ADMIN_API_KEY) {
             request.context.auth = {
                 userId: 'legacy-api',
@@ -91,11 +93,13 @@ module.exports = async (request, reply) => {
             return;
         }
 
-        request.log.error({ requestId, deploymentId: deployment.deploymentId }, 'Unauthorized access attempt');
+        // If even health/auth check fails, log and reply
+        request.log.error({ requestId, deploymentId: deployment?.deploymentId || 'unknown' }, 'Unauthorized access attempt');
         return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'JWT required' });
 
     } catch (err) {
-        request.log.error({ requestId, error: err.message }, 'Failed to build request context');
-        return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Failed to populate context' });
+        const errorRequestId = request?.context?.request?.requestId || requestId || 'unknown';
+        request.log.error({ requestId: errorRequestId, error: err.message }, 'Failed to build request context');
+        return reply.status(500).send({ error: 'INTERNAL_ERROR', message: `Failed to populate context: ${err.message}` });
     }
 };

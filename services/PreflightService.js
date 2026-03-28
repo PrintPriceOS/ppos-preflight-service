@@ -55,13 +55,19 @@ class PreflightService {
     }
 
     async analyze(fileStream, filename, context, options = {}) {
-        const { auth, deployment, request: contextRequest } = context;
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const contextRequest = safeContext.request || safeContext.req || null;
+        const requestHeaders = contextRequest?.headers || {};
+        const safeRequestId = contextRequest?.requestId || safeContext.requestId || 'unknown';
+
+        const { auth, deployment } = safeContext;
         if (!auth || !auth.tenantId) {
             throw new PPOSError(ErrorCodes.UNAUTHORIZED, 'Tenant identification is mandatory.', ErrorTypes.USER_ERROR);
         }
 
         // Idempotency Check
-        const idempotencyKey = contextRequest.headers?.['idempotency-key'];
+        const idempotencyKey = requestHeaders['idempotency-key'];
         if (idempotencyKey) {
             const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
             if (existing) {
@@ -102,7 +108,7 @@ class PreflightService {
             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, input_bytes, idempotency_key) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [jobId, tenantId, deployment.deploymentId, auth.userId, 'ANALYZE', 'PROCESSING', stats.size, idempotencyKey],
-            { tenantId, requestId: contextRequest.requestId }
+            { tenantId, requestId: safeRequestId }
         );
 
         // Audit Event (Phase 7)
@@ -125,14 +131,14 @@ class PreflightService {
             await db.execute(
                 "UPDATE jobs SET status = 'COMPLETED', input_bytes = ? WHERE id = ?",
                 [stats.size, jobId],
-                { tenantId, requestId: contextRequest.requestId }
+                { tenantId, requestId: safeRequestId }
             );
 
             return report;
         } else {
             // Phase 2: Normalized Job Envelope (V2 Canonical)
             const fileUrl = await this._resolveCanonicalInputPdf(tenantId, jobId, 'ANALYZE');
-            
+
             const jobEnvelope = {
                 jobId,
                 tenantId,
@@ -147,8 +153,8 @@ class PreflightService {
                     }
                 },
                 trace: {
-                    requestId: contextRequest.requestId || context.requestId || 'unknown',
-                    traceparent: contextRequest.headers?.['traceparent'] || context.traceparent || null
+                    requestId: safeRequestId,
+                    traceparent: requestHeaders['traceparent'] || context.traceparent || null
                 },
                 contractMode: 'v2_emitted'
             };
@@ -169,7 +175,13 @@ class PreflightService {
     }
 
     async autofix(assetId, policy, context, options = {}) {
-        const { auth, deployment, request: contextRequest } = context || {};
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const contextRequest = safeContext.request || safeContext.req || null;
+        const requestHeaders = contextRequest?.headers || {};
+        const safeRequestId = contextRequest?.requestId || safeContext.requestId || 'unknown';
+
+        const { auth, deployment } = safeContext;
         if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for autofix.');
 
         const jobId = `fix_${Date.now()}`;
@@ -177,7 +189,7 @@ class PreflightService {
 
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
         const storageContext = this._normalizeStorageContext(context);
-        
+
         await policyEngine.validateExecution(context, effectivePolicy, {
             fileSize: options.fileSize || 0,
             type: 'AUTOFIX'
@@ -186,8 +198,7 @@ class PreflightService {
         // Ensure storage is initialized even if asset exists (for the new jobId)
         await this.storage.initializeJobStorage(storageContext, jobId);
 
-        const idempotencyKey = contextRequest?.headers?.['idempotency-key'];
-        const safeRequestId = contextRequest?.requestId || context?.requestId || 'unknown';
+        const idempotencyKey = requestHeaders['idempotency-key'];
         if (idempotencyKey) {
             const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
             if (existing) {
@@ -216,7 +227,7 @@ class PreflightService {
 
         // 3. Orchestrate canonical AUTOFIX envelope (Worker V2 Contract)
         const resolvedPolicyProfile = effectivePolicy.id || policy.id || policy.profileId || 'default_autofix_profile';
-        
+
         const jobEnvelope = {
             jobId,
             tenantId,
@@ -234,7 +245,7 @@ class PreflightService {
             policyProfile: resolvedPolicyProfile,
             trace: {
                 requestId: safeRequestId,
-                traceparent: contextRequest?.headers?.['traceparent'] || context?.traceparent || null
+                traceparent: requestHeaders['traceparent'] || context?.traceparent || null
             },
             contractMode: 'v2_emitted'
         };
