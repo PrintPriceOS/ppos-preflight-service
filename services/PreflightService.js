@@ -60,6 +60,7 @@ class PreflightService {
         const contextRequest = safeContext.request || safeContext.req || null;
         const requestHeaders = contextRequest?.headers || {};
         const safeRequestId = contextRequest?.requestId || safeContext.requestId || 'unknown';
+        const safeTraceparent = requestHeaders['traceparent'] || safeContext.traceparent || null;
 
         const { auth, deployment } = safeContext;
         if (!auth || !auth.tenantId) {
@@ -80,16 +81,16 @@ class PreflightService {
         const tenantId = auth.tenantId;
 
         // --- Phase 4: Runtime Governance (Pre-Job Enforcement) ---
-        const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
+        const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
 
         // Initial staging to check file size (temporarily staged)
-        const storageContext = this._normalizeStorageContext(context);
+        const storageContext = this._normalizeStorageContext(safeContext);
         await this.storage.initializeJobStorage(storageContext, jobId);
         const { filePath } = await this.storage.saveInputFile(tenantId, jobId, fileStream, filename);
         const stats = await require('fs-extra').stat(filePath);
 
         try {
-            await policyEngine.validateExecution(context, effectivePolicy, {
+            await policyEngine.validateExecution(safeContext, effectivePolicy, {
                 fileSize: stats.size,
                 type: 'ANALYZE'
             });
@@ -107,12 +108,12 @@ class PreflightService {
         await db.execute(
             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, input_bytes, idempotency_key) 
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [jobId, tenantId, deployment.deploymentId, auth.userId, 'ANALYZE', 'PROCESSING', stats.size, idempotencyKey],
+            [jobId, tenantId, deployment?.deploymentId || 'unknown', auth?.userId || 'SYSTEM', 'ANALYZE', 'PROCESSING', stats.size, idempotencyKey || null],
             { tenantId, requestId: safeRequestId }
         );
 
         // Audit Event (Phase 7)
-        await auditLogger.log(context, {
+        await auditLogger.log(safeContext, {
             action: 'JOB_CREATED',
             resourceType: 'JOB',
             resourceId: jobId,
@@ -142,10 +143,10 @@ class PreflightService {
             const jobEnvelope = {
                 jobId,
                 tenantId,
-                requestedBy: auth.userId,
-                deploymentId: deployment.deploymentId,
-                tenantIsolation: deployment.tenantIsolation,
-                serviceTier: deployment.serviceTier,
+                requestedBy: auth?.userId || 'SYSTEM',
+                deploymentId: deployment?.deploymentId || 'LOCAL',
+                tenantIsolation: deployment?.tenantIsolation || 'logical',
+                serviceTier: deployment?.serviceTier || 'standard',
                 input: {
                     fileUrl,
                     specs: {
@@ -154,7 +155,7 @@ class PreflightService {
                 },
                 trace: {
                     requestId: safeRequestId,
-                    traceparent: requestHeaders['traceparent'] || context.traceparent || null
+                    traceparent: safeTraceparent
                 },
                 contractMode: 'v2_emitted'
             };
@@ -163,8 +164,8 @@ class PreflightService {
 
             // Log enqueued status
             await db.execute("UPDATE jobs SET status = 'QUEUED' WHERE id = ?", [jobId]);
-
-            await auditLogger.log(context, {
+ 
+            await auditLogger.log(safeContext, {
                 action: 'JOB_QUEUED',
                 resourceType: 'JOB',
                 resourceId: jobId
@@ -180,17 +181,18 @@ class PreflightService {
         const contextRequest = safeContext.request || safeContext.req || null;
         const requestHeaders = contextRequest?.headers || {};
         const safeRequestId = contextRequest?.requestId || safeContext.requestId || 'unknown';
+        const safeTraceparent = requestHeaders['traceparent'] || safeContext.traceparent || null;
 
         const { auth, deployment } = safeContext;
         if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for autofix.');
 
         const jobId = `fix_${Date.now()}`;
         const tenantId = auth.tenantId;
-
-        const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
-        const storageContext = this._normalizeStorageContext(context);
-
-        await policyEngine.validateExecution(context, effectivePolicy, {
+ 
+        const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
+        const storageContext = this._normalizeStorageContext(safeContext);
+ 
+        await policyEngine.validateExecution(safeContext, effectivePolicy, {
             fileSize: options.fileSize || 0,
             type: 'AUTOFIX'
         });
@@ -215,11 +217,11 @@ class PreflightService {
         await db.execute(
             `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
               VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [jobId, tenantId, deployment.deploymentId, auth.userId, 'AUTOFIX', 'QUEUED', idempotencyKey],
+            [jobId, tenantId, deployment?.deploymentId || 'unknown', auth?.userId || 'SYSTEM', 'AUTOFIX', 'QUEUED', idempotencyKey || null],
             { tenantId, requestId: safeRequestId }
         );
 
-        await auditLogger.log(context, {
+        await auditLogger.log(safeContext, {
             action: 'AUTOFIX_ENQUEUED',
             resourceType: 'JOB',
             resourceId: jobId
@@ -231,10 +233,10 @@ class PreflightService {
         const jobEnvelope = {
             jobId,
             tenantId,
-            requestedBy: auth.userId,
-            deploymentId: deployment.deploymentId,
-            tenantIsolation: deployment.tenantIsolation,
-            serviceTier: deployment.serviceTier,
+            requestedBy: auth?.userId || 'SYSTEM',
+            deploymentId: deployment?.deploymentId || 'LOCAL',
+            tenantIsolation: deployment?.tenantIsolation || 'logical',
+            serviceTier: deployment?.serviceTier || 'standard',
             input: {
                 fileUrl,
                 specs: {
@@ -245,7 +247,7 @@ class PreflightService {
             policyProfile: resolvedPolicyProfile,
             trace: {
                 requestId: safeRequestId,
-                traceparent: requestHeaders['traceparent'] || context?.traceparent || null
+                traceparent: safeTraceparent
             },
             contractMode: 'v2_emitted'
         };
@@ -259,7 +261,11 @@ class PreflightService {
      * Generates visual previews for a job.
      */
     async generatePreviews(jobId, context, options = {}) {
-        const { auth } = context;
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const { auth } = safeContext;
+        if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for preview generation.');
+
         const tenantId = auth.tenantId;
 
         // 1. Retrieve input file (Search input subfolder)
@@ -283,7 +289,11 @@ class PreflightService {
      * Retrieves the status of a job from the database.
      */
     async getJobStatus(jobId, context) {
-        const { auth } = context;
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const { auth } = safeContext;
+        if (!auth || !auth.tenantId) throw new Error('Tenant identification is mandatory for job status check.');
+
         console.log(`[PRELIGHT][JOBS] Querying status for job: ${jobId}`);
 
         const [job] = await db.query(
@@ -314,8 +324,12 @@ class PreflightService {
      * Retrieves the active preflight policies.
      */
     async getPolicies(context) {
-        console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${context.auth?.tenantId}`);
-        const effectivePolicy = await policyEngine.resolveEffectivePolicy(context);
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const { auth } = safeContext;
+        
+        console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${auth?.tenantId || 'unknown'}`);
+        const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
 
         // Transform internal policy format to canonical contract
         return {

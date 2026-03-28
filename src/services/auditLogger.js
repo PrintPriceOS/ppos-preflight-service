@@ -31,17 +31,23 @@ class AuditLogger {
      * @param {object} detail - Detail of the action (action, resourceType, resourceId, ip, userAgent)
      */
     async log(context, detail) {
-        const { auth, deployment, request: contextRequest } = context || {};
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const contextRequest = safeContext.request || safeContext.req || null;
+        const requestHeaders = contextRequest?.headers || {};
+        const safeRequestId = contextRequest?.requestId || safeContext.requestId || 'unknown';
+        const safeTraceparent = requestHeaders['traceparent'] || safeContext.traceparent || null;
+
+        const { auth, deployment } = safeContext;
         const { 
             action, 
             resourceType = 'API_ENDPOINT', 
             resourceId = 'N/A', 
-            ip = '0.0.0.0', 
-            userAgent = 'Unknown',
+            ip = contextRequest?.ip || '0.0.0.0', 
+            userAgent = contextRequest?.userAgent || 'Unknown',
             governanceSnapshot = null 
         } = detail;
 
-        const requestId = contextRequest?.requestId || 'unknown';
         const tenantId = auth?.tenantId || 'SYSTEM';
         const deploymentId = deployment?.deploymentId || 'LOCAL';
         const userId = auth?.userId || 'SYSTEM';
@@ -58,7 +64,7 @@ class AuditLogger {
                     deploymentId,
                     userId,
                     userRole,
-                    requestId,
+                    safeRequestId,
                     action,
                     resourceType,
                     resourceId,
@@ -66,16 +72,17 @@ class AuditLogger {
                     userAgent,
                     governanceSnapshot ? JSON.stringify(governanceSnapshot) : null
                 ],
-                { tenantId, requestId }
+                { tenantId, requestId: safeRequestId }
             );
         } catch (err) {
-            console.error(`[AUDIT-PERSIST-ERR] Failed to record audit for Request ${requestId}: ${err.message}`);
+            console.error(`[AUDIT-PERSIST-ERR] Failed to record audit for Request ${safeRequestId}: ${err.message}`);
         }
 
         // 2. Output to structured log (STDOUT) for log aggregators (Elastic/Grafana)
         console.log(JSON.stringify({
              level: 'audit',
-             requestId,
+             requestId: safeRequestId,
+             traceparent: safeTraceparent,
              tenantId,
              deploymentId,
              actor: { userId, userRole },
@@ -90,12 +97,15 @@ class AuditLogger {
      * Convenience method for policy enforcement auditing.
      */
     async logPolicyViolation(context, code, message, snapshot) {
-        await this.log(context, {
+        const safeContext = context || {};
+        const contextRequest = safeContext.request || safeContext.req || null;
+        
+        await this.log(safeContext, {
             action: `GOVERNANCE_BLOCK: ${code}`,
             resourceType: 'POLICY_ENGINE',
             resourceId: code,
             governanceSnapshot: snapshot,
-            ip: context?.request?.ip || '0.0.0.0'
+            ip: contextRequest?.ip || '0.0.0.0'
         });
     }
 
@@ -103,11 +113,14 @@ class AuditLogger {
      * Convenience method for authentication auditing.
      */
     async logAuthEvent(context, status, message) {
-        await this.log(context, {
+        const safeContext = context || {};
+        const contextRequest = safeContext.request || safeContext.req || null;
+
+        await this.log(safeContext, {
             action: `AUTH_${status.toUpperCase()}`,
             resourceType: 'IDENTITY_SERVICE',
             resourceId: status,
-            ip: context?.request?.ip || '0.0.0.0'
+            ip: contextRequest?.ip || '0.0.0.0'
         });
     }
 

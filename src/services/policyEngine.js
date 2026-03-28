@@ -51,7 +51,9 @@ class PolicyEngine {
      * @param {object} context - Normalized request context (auth, deployment)
      */
     async resolveEffectivePolicy(context) {
-        const { auth, deployment } = context;
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const { auth, deployment } = safeContext;
         
         if (!deployment || !deployment.serviceTier) {
             return this.getSafeModePolicy();
@@ -62,7 +64,8 @@ class PolicyEngine {
         const basePolicy = TIER_DEFAULTS[tier] || TIER_DEFAULTS.standard;
 
         // 2. Fetch Tenant Overrides from DB
-        const overrides = await this._getTenantOverrides(auth.tenantId);
+        const tenantId = auth?.tenantId || 'PUBLIC';
+        const overrides = await this._getTenantOverrides(tenantId);
 
         // 3. Construct Effective Policy
         const effectivePolicy = {
@@ -98,7 +101,9 @@ class PolicyEngine {
      * Performs runtime checks before job execution.
      */
     async validateExecution(context, effectivePolicy, jobDetails) {
-        const { auth } = context;
+        // --- Phase 10: context normalization ---
+        const safeContext = context || {};
+        const { auth } = safeContext;
         const { fileSize, type } = jobDetails;
         const auditLogger = require('./auditLogger');
 
@@ -109,13 +114,14 @@ class PolicyEngine {
             }
 
             // 2. Check Daily Usage (Persistent check)
-            const usageToday = await this._getDailyJobCount(auth.tenantId);
+            const tenantId = auth?.tenantId || 'PUBLIC';
+            const usageToday = await this._getDailyJobCount(tenantId);
             if (usageToday >= effectivePolicy.effectiveLimits.dailyJobLimit) {
                 throw this.createPolicyError('PLAN_LIMIT_REACHED', 'Daily job limit reached for this tenant.');
             }
 
             // 3. Check Concurrency
-            const activeJobs = await this._getActiveJobCount(auth.tenantId);
+            const activeJobs = await this._getActiveJobCount(tenantId);
             if (activeJobs >= effectivePolicy.effectiveLimits.maxConcurrentJobs) {
                 throw this.createPolicyError('DEPLOYMENT_CONSTRAINT_BLOCKED', 'Maximum concurrent jobs reached.');
             }
@@ -123,7 +129,7 @@ class PolicyEngine {
             return true;
         } catch (err) {
             if (err.isPolicyViolation) {
-                await auditLogger.logPolicyViolation(context, err.code, err.message, effectivePolicy);
+                await auditLogger.logPolicyViolation(safeContext, err.code, err.message, effectivePolicy);
             }
             throw err;
         }
