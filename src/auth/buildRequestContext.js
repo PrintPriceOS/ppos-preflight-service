@@ -4,6 +4,28 @@ const requestTracer = require('../services/requestTracer');
 const auditLogger = require('../services/auditLogger');
 
 /**
+ * Normalizes scopes from the decoded JWT payload into a clean string array.
+ * Robustly handles scopes as an array, a string with spaces/commas, or the legacy 'scope' field.
+ */
+function normalizeScopes(decoded) {
+    if (!decoded) return [];
+    
+    const candidate = decoded.scopes || decoded.scope || [];
+    
+    if (Array.isArray(candidate)) {
+        return candidate
+            .filter(s => typeof s === 'string' && s.trim())
+            .map(s => s.trim());
+    }
+    
+    if (typeof candidate === 'string') {
+        return candidate.split(/[\s,]+/).filter(Boolean);
+    }
+    
+    return [];
+}
+
+/**
  * Fastify hook to build the normalized request context.
  * 
  * After auth, attaches a normalized object to req.context.
@@ -57,12 +79,19 @@ module.exports = async (request, reply) => {
             const token = authHeader.split(' ')[1];
             try {
                 const decoded = verifyJwt(token);
+                
+                // [AUTH-DEBUG] Phase 10: JWT Investigation
+                const traceId = safeRequestId ? `[${safeRequestId}] ` : '';
+                request.log?.info(`${traceId}[AUTH-DEBUG] Raw JWT payload: role=${decoded.role}, tenantId=${decoded.tenantId}, scope=${decoded.scope}, scopes=${JSON.stringify(decoded.scopes)} (type=${typeof decoded.scopes}, isArray=${Array.isArray(decoded.scopes)})`);
+
                 request.context.auth = {
                     userId: decoded.userId,
                     tenantId: decoded.tenantId || 'default',
                     role: decoded.role || 'GUEST',
-                    scopes: decoded.scopes || []
+                    scopes: normalizeScopes(decoded)
                 };
+
+                request.log?.info(`${traceId}[AUTH-DEBUG] Final request context auth: role=${request.context.auth.role}, scopes=${JSON.stringify(request.context.auth.scopes)} (type=${typeof request.context.auth.scopes}, isArray=${Array.isArray(request.context.auth.scopes)})`);
                 
                 request.log?.info({ 
                     requestId: safeRequestId, 

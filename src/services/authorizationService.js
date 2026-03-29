@@ -57,10 +57,15 @@ class AuthorizationService {
         const normalizedRole = auth.role.toLowerCase();
         const userScopes = ROLE_SCOPES[normalizedRole] || [];
         
-        if (userScopes.includes(requiredScope)) {
+        const roleHasScope = userScopes.includes(requiredScope);
+        if (roleHasScope) {
              // 3. Deployment Contract-Aware Governance Logic
              return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
         }
+
+        // [AUTHZ-DEBUG] Log scope DENY before returning false
+        const traceId = context?.requestId ? `[${context.requestId}] ` : '';
+        console.warn(`${traceId}[AUTHZ-DEBUG] Scope match failed: required=${requiredScope}, authRole=${auth.role}, authScopes=${JSON.stringify(auth.scopes)}, jwtScopeMatch=${Array.isArray(auth.scopes) && auth.scopes.includes(requiredScope)}, roleFallback=${roleHasScope}`);
 
         return false;
     }

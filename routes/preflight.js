@@ -196,6 +196,63 @@ async function preflightRoutes(fastify, options) {
     });
 
     /**
+     * GET /api/preflight/jobs/:id/artifacts/:artifactId
+     * ALIGNED WITH APP/BFF CONTRACT
+     */
+    fastify.get('/jobs/:id/artifacts/:artifactId', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+        const { id: jobId, artifactId } = request.params;
+        const { auth } = request.context;
+
+        try {
+            // Priority search across standard isolation subfolders
+            const subfolders = ['output', 'reports', 'input'];
+            let finalPath = null;
+
+            for (const sub of subfolders) {
+                const potential = path.join(storage.getJobSubfolder(auth.tenantId, jobId, sub), artifactId);
+                if (await fs.pathExists(potential)) {
+                    finalPath = potential;
+                    break;
+                }
+            }
+
+            if (!finalPath) {
+                return reply.status(404).send({ 
+                    error: 'ARTIFACT_NOT_FOUND', 
+                    message: `Artifact ${artifactId} not found/accessible for job ${jobId}.` 
+                });
+            }
+
+            // Phase 10: isolation breach verification
+            storage.verifyPathIsolation(auth.tenantId, finalPath);
+
+            const ext = path.extname(artifactId).toLowerCase();
+            const mimeTypes = {
+                '.pdf': 'application/pdf',
+                '.json': 'application/json',
+                '.xml': 'application/xml',
+                '.txt': 'text/plain',
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg'
+            };
+
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            reply.type(contentType);
+            
+            // Enforce attachment for binaries or PDFs to ensure browser safety
+            if (contentType === 'application/octet-stream' || ext === '.pdf') {
+                reply.header('Content-Disposition', `attachment; filename="${artifactId}"`);
+            }
+
+            return fs.createReadStream(finalPath);
+
+        } catch (err) {
+            console.error(`[PRELIGHT][ERROR] GET /artifacts - ${err.message}`);
+            return reply.status(500).send({ error: 'INTERNAL_ERROR', message: err.message });
+        }
+    });
+
+    /**
      * POST /api/preflight/preview/pages
      * Generates previews for the given job.
      */

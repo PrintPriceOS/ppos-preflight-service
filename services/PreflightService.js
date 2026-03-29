@@ -164,7 +164,7 @@ class PreflightService {
 
             // Log enqueued status
             await db.execute("UPDATE jobs SET status = 'QUEUED' WHERE id = ?", [jobId]);
- 
+
             await auditLogger.log(safeContext, {
                 action: 'JOB_QUEUED',
                 resourceType: 'JOB',
@@ -188,10 +188,10 @@ class PreflightService {
 
         const jobId = `fix_${Date.now()}`;
         const tenantId = auth.tenantId;
- 
+
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
         const storageContext = this._normalizeStorageContext(safeContext);
- 
+
         await policyEngine.validateExecution(safeContext, effectivePolicy, {
             fileSize: options.fileSize || 0,
             type: 'AUTOFIX'
@@ -327,7 +327,7 @@ class PreflightService {
         // --- Phase 10: context normalization ---
         const safeContext = context || {};
         const { auth } = safeContext;
-        
+
         console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${auth?.tenantId || 'unknown'}`);
         const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
 
