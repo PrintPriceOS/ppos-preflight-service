@@ -10,6 +10,8 @@ const fs = require('fs-extra');
  * 
  * Orchestrates the analysis and autofix lifecycle with governance persistence.
  */
+const policyCatalog = require('./policyCatalog');
+
 class PreflightService {
     constructor(engineClient, workerClient, storage) {
         this.engine = engineClient;
@@ -328,18 +330,11 @@ class PreflightService {
         const safeContext = context || {};
         const { auth } = safeContext;
 
-        console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${auth?.tenantId || 'unknown'}`);
-        const effectivePolicy = await policyEngine.resolveEffectivePolicy(safeContext);
+        console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${auth?.tenantId || 'unknown'}. Loaded ${policyCatalog.length} policies.`);
 
-        // Transform internal policy format to canonical contract
+        // Return the full production-ready catalog
         return {
-            policies: [
-                {
-                    id: effectivePolicy.id || 'default_policy',
-                    name: effectivePolicy.name || 'Standard Preflight Policy',
-                    rules: effectivePolicy.rules || []
-                }
-            ]
+            policies: policyCatalog
         };
     }
 }
