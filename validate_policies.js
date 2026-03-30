@@ -6,7 +6,7 @@ const Module = require('module');
 const originalRequire = Module.prototype.require;
 
 // PHASE 10: Precise Module Mocks (Service Isolation)
-Module.prototype.require = function(id) {
+Module.prototype.require = function (id) {
     const mocks = {
         '../src/services/db': {
             query: async () => [],
@@ -16,13 +16,13 @@ Module.prototype.require = function(id) {
             resolveEffectivePolicy: async () => ({})
         },
         '../src/services/auditLogger': {
-            log: async () => {}
+            log: async () => { }
         },
         'mysql2/promise': { createPool: () => ({}) },
         'fs-extra': {
             pathExists: async () => true,
             readdir: async () => [],
-            ensureDir: async () => {}
+            ensureDir: async () => { }
         }
     };
 
@@ -36,13 +36,13 @@ const PreflightService = require('./services/PreflightService');
 
 async function runServiceSmokeTest() {
     console.log('--- STARTING: ppos-preflight-service smoke test ---');
-    
+
     // Instantiate with mock deps
-    const service = new PreflightService({}, {}, {}); 
-    
+    const service = new PreflightService({}, {}, {});
+
     try {
         const response = await service.getPolicies({ auth: { tenantId: 'test-tenant' } });
-        
+
         // 1. Validate Response Shape
         if (!response?.policies || !Array.isArray(response.policies)) {
             throw new Error(`Invalid response shape: expected { policies: [...] } but got ${JSON.stringify(response)}`);
@@ -74,7 +74,7 @@ async function runServiceSmokeTest() {
         console.log(`PASS: Received ${response.policies.length} policies.`);
         console.log(`PASS: Found all ${requiredIds.length} required canonical policy IDs.`);
         console.log('DONE: service-level smoke test passed.');
-        
+
     } catch (e) {
         console.error('FATAL:', e.message);
         process.exit(1);
