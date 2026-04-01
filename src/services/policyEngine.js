@@ -11,21 +11,21 @@ const db = require('./db');
 
 const TIER_DEFAULTS = {
     standard: {
-        maxFileSizeMb: 50,
-        maxConcurrentJobs: 2,
-        dailyJobLimit: 100,
-        storageQuotaMb: 1024, // 1GB
+        maxFileSizeMb: 500,
+        maxConcurrentJobs: 100,
+        dailyJobLimit: 10000,
+        storageQuotaMb: 10240, 
         featureFlags: {
-            priorityProcessing: false,
-            advancedObservability: false,
-            tenantScopedRetention: false
+            priorityProcessing: true,
+            advancedObservability: true,
+            tenantScopedRetention: true
         }
     },
     enterprise: {
-        maxFileSizeMb: 250,
-        maxConcurrentJobs: 10,
-        dailyJobLimit: 1000,
-        storageQuotaMb: 10240, // 10GB
+        maxFileSizeMb: 2000,
+        maxConcurrentJobs: 500,
+        dailyJobLimit: 100000,
+        storageQuotaMb: 102400, 
         featureFlags: {
             priorityProcessing: true,
             advancedObservability: true,
@@ -33,10 +33,10 @@ const TIER_DEFAULTS = {
         }
     },
     enterprise_plus: {
-        maxFileSizeMb: 1000, // 1GB
-        maxConcurrentJobs: 50,
-        dailyJobLimit: 5000,
-        storageQuotaMb: 102400, // 100GB
+        maxFileSizeMb: 5000, 
+        maxConcurrentJobs: 1000,
+        dailyJobLimit: 500000,
+        storageQuotaMb: 1024000, 
         featureFlags: {
             priorityProcessing: true,
             advancedObservability: true,
