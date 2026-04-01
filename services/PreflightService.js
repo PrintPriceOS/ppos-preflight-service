@@ -173,7 +173,7 @@ class PreflightService {
                 resourceId: jobId
             });
 
-            return result;
+            return { ...result, id: jobId, jobId: jobId };
         }
     }
 
