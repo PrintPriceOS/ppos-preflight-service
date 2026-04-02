@@ -124,21 +124,44 @@ class PreflightService {
 
         // 4. Decide: Synchronous Engine vs Asynchronous Worker
         if (stats.size < 5 * 1024 * 1024) { // < 5MB sync
+            console.log(`[PREFLIGHT][SERVICE] Starting sync analysis for job: ${jobId}`);
+            const start = Date.now();
+            
             const report = await this.engine.analyze(filePath, {
                 tenantId,
                 jobId,
                 outputDir: this.storage.getJobSubfolder(tenantId, jobId, 'output')
             });
 
-            // Update on Completion
-            await db.execute(
-                "UPDATE jobs SET status = 'COMPLETED', input_bytes = ? WHERE id = ?",
-                [stats.size, jobId],
-                { tenantId, requestId: safeRequestId }
-            );
+            const elapsed = Date.now() - start;
+            console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
+
+            const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+            
+            try {
+                // v2.4.10: Explicit Artifact Generation (Phase 10 Intelligence Layer)
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Generating persistent artifacts for job: ${jobId}`);
+                const reportPath = path.join(outputDir, 'report.json');
+                await fs.writeJson(reportPath, report);
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Analysis report artifact saved to: ${reportPath}`);
+
+                // Update on Completion with full result persistence
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Finalizing job status and results in database for job: ${jobId}`);
+                await db.execute(
+                    "UPDATE jobs SET status = 'COMPLETED', input_bytes = ?, result = ? WHERE id = ?",
+                    [stats.size, JSON.stringify(report), jobId],
+                    { tenantId, requestId: safeRequestId }
+                );
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] FINALIZED_JOB: ${jobId} (status: COMPLETED)`);
+            } catch (finalizeErr) {
+                console.error(`[PREFLIGHT][SERVICE][ERROR][${safeRequestId}] Job finalization failed for ${jobId}:`, finalizeErr.message);
+                throw finalizeErr;
+            }
 
             return report;
         } else {
+            console.log(`[PREFLIGHT][SERVICE] Delegating to background worker for large job: ${jobId} (${stats.size} bytes)`);
+            
             // Phase 2: Normalized Job Envelope (V2 Canonical)
             const fileUrl = await this._resolveCanonicalInputPdf(tenantId, jobId, 'ANALYZE');
 
@@ -162,9 +185,13 @@ class PreflightService {
                 contractMode: 'v2_emitted'
             };
 
+            const startWorker = Date.now();
             const result = await this.worker.enqueue('ANALYZE', jobEnvelope);
+            const elapsedWorker = Date.now() - startWorker;
+            console.log(`[PREFLIGHT][SERVICE] Job enqueued to worker in ${elapsedWorker}ms for job: ${jobId}`);
 
             // Log enqueued status
+            console.log(`[PREFLIGHT][SERVICE] Updating job status to QUEUED in DB for job: ${jobId}`);
             await db.execute("UPDATE jobs SET status = 'QUEUED' WHERE id = ?", [jobId]);
 
             await auditLogger.log(safeContext, {
