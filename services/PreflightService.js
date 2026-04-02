@@ -145,11 +145,15 @@ class PreflightService {
                 await fs.writeJson(reportPath, report);
                 console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Analysis report artifact saved to: ${reportPath}`);
 
+                // v2.4.110: Artifact Registration Sync
+                const artifacts = await this.getJobArtifacts(jobId, tenantId);
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Registered ${artifacts.length} artifacts for sync job: ${jobId}`);
+
                 // Update on Completion with full result persistence
                 console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Finalizing job status and results in database for job: ${jobId}`);
                 await db.execute(
                     "UPDATE jobs SET status = 'COMPLETED', input_bytes = ?, result = ? WHERE id = ?",
-                    [stats.size, JSON.stringify(report), jobId],
+                    [stats.size, JSON.stringify({ ...report, type: 'ANALYZE', artifacts: artifacts.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {}) }), jobId],
                     { tenantId, requestId: safeRequestId }
                 );
                 console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] FINALIZED_JOB: ${jobId} (status: COMPLETED)`);
@@ -345,8 +349,63 @@ class PreflightService {
             progress: job.progress || 0,
             result: result || {},
             error: job.error || null,
-            createdAt: job.created_at
+            createdAt: job.created_at,
+            // v2.4.110: Dynamic Artifact Hydration
+            artifacts: await this.getJobArtifacts(jobId, auth.tenantId)
         };
+    }
+
+    /**
+     * getJobArtifacts
+     * Scans storage and returns a canonical list of artifacts for a job.
+     */
+    async getJobArtifacts(jobId, tenantId) {
+        const artifacts = [];
+        const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+        
+        try {
+            if (await fs.pathExists(outputDir)) {
+                const files = await fs.readdir(outputDir);
+                for (const file of files) {
+                    const filePath = path.join(outputDir, file);
+                    const stats = await fs.stat(filePath);
+                    
+                    // Categorize artifact based on filename/ext
+                    let type = 'output_file';
+                    if (file === 'report.json') type = 'analysis_report';
+                    else if (file === 'fixed.pdf' || file === 'normalized.pdf') type = 'final_fixed_pdf';
+                    else if (file === 'fix_audit.json') type = 'audit_report';
+                    else if (file.endsWith('.png')) type = 'page_preview';
+
+                    artifacts.push({
+                        id: Buffer.from(`${jobId}:${file}`).toString('base64').replace(/=/g, ''),
+                        jobId,
+                        type,
+                        name: file,
+                        mimeType: this._getMimeByExt(path.extname(file)),
+                        size: stats.size,
+                        createdAt: stats.birthtime,
+                        status: 'READY'
+                    });
+                }
+            }
+        } catch (err) {
+            console.error(`[ARTIFACT-DISCOVERY-ERROR] jobId=${jobId}:`, err.message);
+        }
+        
+        return artifacts;
+    }
+
+    _getMimeByExt(ext) {
+        const mapping = {
+            '.pdf': 'application/pdf',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.txt': 'text/plain'
+        };
+        return mapping[ext.toLowerCase()] || 'application/octet-stream';
     }
 
     /**
