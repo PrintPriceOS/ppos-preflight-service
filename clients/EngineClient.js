@@ -10,9 +10,18 @@ class EngineClient {
 
     async analyze(filePath, options) {
         console.log(`[CLIENT][ENGINE] Calling engine.analyze for ${filePath}`);
+        const start = Date.now();
         
         if (this.engine) {
-            let report = await this.engine.analyzePdf(filePath, options);
+            // Add a safety timeout of 2 minutes for deterministic analysis
+            const analysisPromise = this.engine.analyzePdf(filePath, options);
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('ENGINE_ANALYSIS_TIMEOUT')), 120000)
+            );
+
+            let report = await Promise.race([analysisPromise, timeoutPromise]);
+            const elapsed = Date.now() - start;
+            console.log(`[CLIENT][ENGINE] engine.analyzePdf completed in ${elapsed}ms for ${filePath}`);
             
             // ==========================================
             // DYNAMIC MOCK: REPLACING HARDCODED ENGINE MOCKS WITH VARIED IND_ CODES
@@ -22,17 +31,17 @@ class EngineClient {
             try { fSize = fs.statSync(filePath).size; } catch(e){}
 
             const allIssues = [
-                { id: "IND_GEOM", message: "Geometría/Alineación incorrecta", severity: "error", fixable: true },
-                { id: "IND_TYPE", message: "Tipografía Legacy encontrada", severity: "warning", fixable: true },
-                { id: "IND_COLOR", message: "Uso de RGB o perfiles no estándar en CMYK", severity: "error", fixable: true },
-                { id: "IND_BOX", message: "Inconsistencias en TrimBox/MediaBox", severity: "warning", fixable: false },
-                { id: "IND_IMAGE", message: "Imágenes por debajo de los 300 DPI", severity: "error", fixable: false },
-                { id: "IND_BLEED", message: "Falta de sangrado / bleed lines", severity: "error", fixable: true },
-                { id: "IND_TRIM", message: "Problema con marcas de corte", severity: "warning", fixable: false },
-                { id: "IND_FONT", message: "Fuentes no incrustadas", severity: "error", fixable: true },
-                { id: "IND_BLACK", message: "Registro excesivo de tinta o negro rico > 320%", severity: "error", fixable: true },
-                { id: "IND_SPOT", message: "Colores directos / Pantone no permitidos", severity: "warning", fixable: true },
-                { id: "IND_PDF", message: "Versión antigua o no compatible con PDF/X", severity: "error", fixable: false }
+                { id: "IND_GEOM", message: "Incorrect Geometry/Alignment", severity: "error", fixable: true },
+                { id: "IND_TYPE", message: "Legacy Typography found", severity: "warning", fixable: true },
+                { id: "IND_COLOR", message: "RGB or non-standard profiles in CMYK", severity: "error", fixable: true },
+                { id: "IND_BOX", message: "TrimBox/MediaBox inconsistencies", severity: "warning", fixable: false },
+                { id: "IND_IMAGE", message: "Images below 300 DPI", severity: "error", fixable: false },
+                { id: "IND_BLEED", message: "Missing bleed or bleed lines", severity: "error", fixable: true },
+                { id: "IND_TRIM", message: "Issues with trim marks", severity: "warning", fixable: false },
+                { id: "IND_FONT", message: "Non-embedded fonts", severity: "error", fixable: true },
+                { id: "IND_BLACK", message: "Excessive ink coverage or rich black > 320%", severity: "error", fixable: true },
+                { id: "IND_SPOT", message: "Spot colors / Pantone colors not allowed", severity: "warning", fixable: true },
+                { id: "IND_PDF", message: "Old or non-compliant PDF/X version", severity: "error", fixable: false }
             ];
 
             let issueCount = Math.max(1, (fSize % 5) + 1);
