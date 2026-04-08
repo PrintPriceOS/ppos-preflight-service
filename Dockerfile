@@ -7,9 +7,9 @@ COPY ppos-preflight-engine ./ppos-preflight-engine
 COPY ppos-shared-infra ./ppos-shared-infra
 COPY ppos-shared-contracts ./ppos-shared-contracts
 
-RUN cd ppos-preflight-engine && npm pack && mv *.tgz ../engine.tgz
-RUN cd ppos-shared-infra && npm pack && mv *.tgz ../infra.tgz
-RUN cd ppos-shared-contracts && npm pack && mv *.tgz ../contracts.tgz
+RUN cd ppos-preflight-engine && TARBALL="$(npm pack | tail -n 1)" && mv "$TARBALL" ../engine.tgz
+RUN cd ppos-shared-infra && TARBALL="$(npm pack | tail -n 1)" && mv "$TARBALL" ../infra.tgz
+RUN cd ppos-shared-contracts && TARBALL="$(npm pack | tail -n 1)" && mv "$TARBALL" ../contracts.tgz
 
 FROM node:20-bookworm-slim AS installer
 
@@ -18,8 +18,8 @@ COPY ppos-preflight-service/package.json ./
 COPY --from=builder /build/*.tgz ./
 
 RUN sed -i -E 's|"file:.*ppos-preflight-engine"|"file:./engine.tgz"|g' package.json && \
-    sed -i -E 's|"file:.*ppos-shared-infra"|"file:./infra.tgz"|g' package.json && \
-    sed -i -E 's|"file:.*ppos-shared-contracts"|"file:./contracts.tgz"|g' package.json
+  sed -i -E 's|"file:.*ppos-shared-infra"|"file:./infra.tgz"|g' package.json && \
+  sed -i -E 's|"file:.*ppos-shared-contracts"|"file:./contracts.tgz"|g' package.json
 
 RUN rm -f package-lock.json
 RUN npm install --omit=dev --no-audit
@@ -27,7 +27,7 @@ RUN npm install --omit=dev --no-audit
 FROM node:20-bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends ghostscript && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+  apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
