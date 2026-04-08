@@ -162,7 +162,22 @@ class PreflightService {
                 throw finalizeErr;
             }
 
-            return report;
+            // Canonical Response Enrichment (Phase 10: Identity Consistency)
+            if (!jobId) {
+                console.error(`[PREFLIGHT][SERVICE][CRITICAL][${safeRequestId}] Sync response identity failure: No jobId for analysis.`);
+            }
+
+            return {
+                id: jobId,
+                jobId,
+                status: 'COMPLETED',
+                ...report,
+                meta: {
+                    ...(report?.meta || {}),
+                    jobId,
+                    tenantId
+                }
+            };
         } else {
             console.log(`[PREFLIGHT][SERVICE] Delegating to background worker for large job: ${jobId} (${stats.size} bytes)`);
             
