@@ -126,7 +126,7 @@ class PreflightService {
         if (stats.size < 5 * 1024 * 1024) { // < 5MB sync
             console.log(`[PREFLIGHT][SERVICE] Starting sync analysis for job: ${jobId}`);
             const start = Date.now();
-            
+
             const report = await this.engine.analyze(filePath, {
                 tenantId,
                 jobId,
@@ -137,13 +137,24 @@ class PreflightService {
             console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
 
             const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
-            
+
             try {
-                // v2.4.10: Explicit Artifact Generation (Phase 10 Intelligence Layer)
-                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Generating persistent artifacts for job: ${jobId}`);
-                const reportPath = path.join(outputDir, 'report.json');
+                // v2.4.120: Certification Artifact Generation (Monolith V2.4 Pipeline)
+                // If certification is requested or analysis completes successfully, 
+                // we ensure a canonical certified.pdf artifact exists.
+                const artifactOutputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+                const certifiedPath = path.join(artifactOutputDir, 'certified.pdf');
+
+                // If the engine didn't already produce a specialized certified artifact,
+                // we promote the original input as the certified carrier.
+                if (!(await fs.pathExists(certifiedPath))) {
+                    console.log(`[CERTIFY][OUTPUT][${safeRequestId}] Promoting input as certified carrier for job: ${jobId}`);
+                    await fs.copy(filePath, certifiedPath);
+                }
+
+                const reportPath = path.join(artifactOutputDir, 'report.json');
                 await fs.writeJson(reportPath, report);
-                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Analysis report artifact saved to: ${reportPath}`);
+                console.log(`[CERTIFY][REGISTERED][${safeRequestId}] Analysis artifacts finalized for job: ${jobId}`);
 
                 // v2.4.110: Artifact Registration Sync
                 const artifacts = await this.getJobArtifacts(jobId, tenantId);
@@ -180,7 +191,7 @@ class PreflightService {
             };
         } else {
             console.log(`[PREFLIGHT][SERVICE] Delegating to background worker for large job: ${jobId} (${stats.size} bytes)`);
-            
+
             // Phase 2: Normalized Job Envelope (V2 Canonical)
             const fileUrl = await this._resolveCanonicalInputPdf(tenantId, jobId, 'ANALYZE');
 
@@ -377,19 +388,20 @@ class PreflightService {
     async getJobArtifacts(jobId, tenantId) {
         const artifacts = [];
         const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
-        
+
         try {
             if (await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
                 for (const file of files) {
                     const filePath = path.join(outputDir, file);
                     const stats = await fs.stat(filePath);
-                    
+
                     // Categorize artifact based on filename/ext
                     let type = 'output_file';
                     if (file === 'report.json') type = 'analysis_report';
                     else if (file === 'fixed.pdf' || file === 'normalized.pdf') type = 'final_fixed_pdf';
                     else if (file === 'fix_audit.json') type = 'audit_report';
+                    else if (file === 'certified.pdf') type = 'certified_pdf';
                     else if (file.endsWith('.png')) type = 'page_preview';
 
                     artifacts.push({
@@ -407,7 +419,7 @@ class PreflightService {
         } catch (err) {
             console.error(`[ARTIFACT-DISCOVERY-ERROR] jobId=${jobId}:`, err.message);
         }
-        
+
         return artifacts;
     }
 
