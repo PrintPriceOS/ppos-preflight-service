@@ -63,6 +63,7 @@ class PreflightService {
     }
 
     async analyze(fileStream, filename, context, options = {}) {
+        const start = Date.now();
         // --- Phase 10: context normalization ---
         const safeContext = context || {};
         const contextRequest = safeContext.request || safeContext.req || null;
