@@ -120,7 +120,7 @@ module.exports = async (request, reply) => {
                     userAgent: safeHeaders['user-agent'] || 'unknown'
                 });
 
-                return reply.status(401).send({ error: 'INVALID_TOKEN', message: err.message });
+                return reply.status(401).send({ error: 'AUTHENTICATION_REQUIRED', message: err.message });
             }
         }
 
@@ -142,7 +142,7 @@ module.exports = async (request, reply) => {
 
         // If even health/auth check fails, log and reply
         request.log?.error({ requestId: safeRequestId, deploymentId: deployment?.deploymentId || 'unknown' }, 'Unauthorized access attempt');
-        return reply.status(401).send({ error: 'UNAUTHORIZED', message: 'JWT required' });
+        return reply.status(401).send({ error: 'AUTHENTICATION_REQUIRED', message: 'JWT required' });
 
     } catch (err) {
         const errorRequestId = request?.context?.request?.requestId || safeRequestId || 'unknown';

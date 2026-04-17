@@ -131,28 +131,24 @@ class PreflightService {
         // 4. Decide: Synchronous Engine vs Asynchronous Worker
         if (stats.size < 5 * 1024 * 1024) { // < 5MB sync
             console.log(`[PREFLIGHT][SERVICE] Starting sync analysis for job: ${jobId}`);
-            const start = Date.now();
-
-            const report = await this.engine.analyze(filePath, {
-                tenantId,
-                jobId,
-                outputDir: this.storage.getJobSubfolder(tenantId, jobId, 'output')
-            });
-
-            const elapsed = Date.now() - start;
-            console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
-
-            const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
-
             try {
-                // v2.4.120: Certification Artifact Generation (Monolith V2.4 Pipeline)
-                // If certification is requested or analysis completes successfully, 
-                // we ensure a canonical certified.pdf artifact exists.
+                const report = await this.engine.analyze(filePath, {
+                    tenantId,
+                    jobId,
+                    outputDir: this.storage.getJobSubfolder(tenantId, jobId, 'output')
+                });
+
+                const elapsed = Date.now() - start;
+                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
+
+                // Phase 10: Silent Failure Prevention (Contract Enforcement)
+                const findings = report.findings || report.issues || [];
+                const finalStatus = findings.length > 0 ? 'COMPLETED' : 'FAILED';
+                const finalOk = findings.length > 0;
+
                 const artifactOutputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
                 const certifiedPath = path.join(artifactOutputDir, 'certified.pdf');
 
-                // If the engine didn't already produce a specialized certified artifact,
-                // we promote the original input as the certified carrier.
                 if (!(await fs.pathExists(certifiedPath))) {
                     console.log(`[CERTIFY][OUTPUT][${safeRequestId}] Promoting input as certified carrier for job: ${jobId}`);
                     await fs.copy(filePath, certifiedPath);
@@ -160,41 +156,72 @@ class PreflightService {
 
                 const reportPath = path.join(artifactOutputDir, 'report.json');
                 await fs.writeJson(reportPath, report);
-                console.log(`[CERTIFY][REGISTERED][${safeRequestId}] Analysis artifacts finalized for job: ${jobId}`);
-
-                // v2.4.110: Artifact Registration Sync
+                
                 const artifacts = await this.getJobArtifacts(jobId, tenantId);
-                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Registered ${artifacts.length} artifacts for sync job: ${jobId}`);
+                
+                // v2.4.120: Verify critical analysis artifacts
+                const hasCertified = artifacts.some(a => a.type === 'certified_pdf');
+                const hasReport = artifacts.some(a => a.type === 'analysis_report');
+                
+                if (!hasCertified || !hasReport) {
+                    console.error(`[PREFLIGHT][INTEGRITY] Missing critical artifacts for job ${jobId}`);
+                }
 
-                // Update on Completion with full result persistence
-                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Finalizing job status and results in database for job: ${jobId}`);
                 await db.execute(
-                    "UPDATE jobs SET status = 'COMPLETED', input_bytes = ?, result = ? WHERE id = ?",
-                    [stats.size, JSON.stringify({ ...report, type: 'ANALYZE', artifacts: artifacts.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {}) }), jobId],
+                    "UPDATE jobs SET status = ?, input_bytes = ?, result = ? WHERE id = ?",
+                    [
+                        finalOk ? 'COMPLETED' : 'FAILED', 
+                        stats.size, 
+                        JSON.stringify({ 
+                            ...report, 
+                            ok: finalOk,
+                            type: 'ANALYZE', 
+                            artifacts: artifacts.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {}) 
+                        }), 
+                        jobId
+                    ],
                     { tenantId, requestId: safeRequestId }
                 );
-                console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] FINALIZED_JOB: ${jobId} (status: COMPLETED)`);
-            } catch (finalizeErr) {
-                console.error(`[PREFLIGHT][SERVICE][ERROR][${safeRequestId}] Job finalization failed for ${jobId}:`, finalizeErr.message);
-                throw finalizeErr;
-            }
 
-            // Canonical Response Enrichment (Phase 10: Identity Consistency)
-            if (!jobId) {
-                console.error(`[PREFLIGHT][SERVICE][CRITICAL][${safeRequestId}] Sync response identity failure: No jobId for analysis.`);
-            }
-
-            return {
-                id: jobId,
-                jobId,
-                status: 'COMPLETED',
-                ...report,
-                meta: {
-                    ...(report?.meta || {}),
-                    jobId,
-                    tenantId
+                if (!finalOk) {
+                    return {
+                        id: jobId,
+                        jobId,
+                        ok: false,
+                        status: 'FAILED',
+                        error: 'ANALYSIS_FAILED',
+                        message: 'Engine returned no findings. Verification required.',
+                        findings: []
+                    };
                 }
-            };
+
+                return {
+                    id: jobId,
+                    jobId,
+                    ok: true,
+                    status: 'COMPLETED',
+                    ...report,
+                    meta: {
+                        ...(report?.meta || {}),
+                        jobId,
+                        tenantId
+                    }
+                };
+            } catch (err) {
+                if (err.message === 'ENGINE_ANALYSIS_TIMEOUT') {
+                    console.error(`[PREFLIGHT][TIMEOUT] Sync analysis timed out for job: ${jobId}`);
+                    await db.execute("UPDATE jobs SET status = 'FAILED', error = 'TIMEOUT' WHERE id = ?", [jobId]);
+                    return {
+                        id: jobId,
+                        jobId,
+                        ok: false,
+                        status: 'DEGRADED',
+                        error: 'ANALYSIS_TIMEOUT',
+                        message: 'Analysis timed out. Service degraded.'
+                    };
+                }
+                throw err;
+            }
         } else {
             console.log(`[PREFLIGHT][SERVICE] Delegating to background worker for large job: ${jobId} (${stats.size} bytes)`);
 
@@ -389,17 +416,64 @@ class PreflightService {
             try { result = JSON.parse(result); } catch (e) { }
         }
 
+        const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
+        
+        // Phase 10: Silent Failure Enforcement for Polling
+        let ok = result?.ok ?? (job.status === 'COMPLETED');
+        let error = job.error || null;
+        let partial = false;
+        let analysis_warnings = [];
+
+        if (job.status === 'COMPLETED' && job.job_type === 'ANALYZE') {
+            const findings = result?.findings || result?.issues || [];
+            if (findings.length === 0) {
+                ok = false;
+                error = 'ANALYSIS_FAILED';
+            } else {
+                // Check for partial success (warnings only)
+                const hasErrors = findings.some(f => f.severity === 'error' || f.severity === 'critical');
+                if (!hasErrors) {
+                    partial = true;
+                    analysis_warnings = findings;
+                }
+            }
+        }
+
+        // Phase 10: Timeout Detection for Polling
+        if (job.status === 'FAILED' && error === 'TIMEOUT') {
+            return {
+                id: canonicalId,
+                jobId: canonicalId,
+                status: 'DEGRADED',
+                ok: false,
+                error: 'ANALYSIS_TIMEOUT',
+                message: 'Analysis timed out. Results are unavailable.'
+            };
+        }
+
+        // Phase 10: Artifact Integrity Verification
+        const isAutofix = job.job_type === 'AUTOFIX';
+        const hasCriticalArtifact = isAutofix 
+            ? artifacts.some(a => a.type === 'final_fixed_pdf')
+            : artifacts.some(a => a.type === 'certified_pdf');
+
+        if (job.status === 'COMPLETED' && !hasCriticalArtifact) {
+            console.error(`[PREFLIGHT][INTEGRITY] Critical artifact missing for ${job.job_type} job ${jobId}`);
+        }
+
         return {
             id: canonicalId,
             jobId: canonicalId,
+            ok,
             status: job.status,
             type: job.job_type,
             progress: job.progress || 0,
             result: result || {},
-            error: job.error || null,
+            error,
+            partial,
+            analysis_warnings,
             createdAt: job.created_at,
-            // v2.4.110: Dynamic Artifact Hydration
-            artifacts: await this.getJobArtifacts(canonicalId, auth.tenantId)
+            artifacts: artifacts
         };
     }
 
@@ -418,11 +492,11 @@ class PreflightService {
                     const filePath = path.join(outputDir, file);
                     const stats = await fs.stat(filePath);
 
-                    // Categorize artifact based on filename/ext
+                    // Categorize artifact based on filename/ext (Canonical Phase 10 Mapping)
                     let type = 'output_file';
                     if (file === 'report.json') type = 'analysis_report';
                     else if (file === 'fixed.pdf' || file === 'normalized.pdf') type = 'final_fixed_pdf';
-                    else if (file === 'fix_audit.json') type = 'audit_report';
+                    else if (file === 'fix_audit.json') type = 'fix_audit';
                     else if (file === 'certified.pdf') type = 'certified_pdf';
                     else if (file.endsWith('.png')) type = 'page_preview';
 
@@ -431,6 +505,7 @@ class PreflightService {
                         jobId,
                         type,
                         name: file,
+                        path: `/jobs/${jobId}/output/${file}`,
                         mimeType: this._getMimeByExt(path.extname(file)),
                         size: stats.size,
                         createdAt: stats.birthtime,

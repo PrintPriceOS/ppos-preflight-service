@@ -5,7 +5,7 @@
 
 const policyCatalog = [
     {
-        id: "OFFSET_MODERN_COATED",
+        id: "OFFSET_MODERN_COATED_F51",
         name: "Offset Modern Coated (FOGRA51)",
         profile: "FOGRA51",
         category: "offset",
@@ -19,7 +19,7 @@ const policyCatalog = [
         }
     },
     {
-        id: "OFFSET_MODERN_UNCOATED",
+        id: "OFFSET_MODERN_UNCOATED_F52",
         name: "Offset Modern Uncoated (FOGRA52)",
         profile: "FOGRA52",
         category: "offset",
@@ -33,7 +33,7 @@ const policyCatalog = [
         }
     },
     {
-        id: "OFFSET_LEGACY_COATED",
+        id: "OFFSET_LEGACY_COATED_F39",
         name: "Offset Legacy Coated (FOGRA39)",
         profile: "FOGRA39",
         category: "offset",
@@ -47,7 +47,7 @@ const policyCatalog = [
         }
     },
     {
-        id: "OFFSET_LEGACY_UNCOATED",
+        id: "OFFSET_LEGACY_UNCOATED_F29",
         name: "Offset Legacy Uncoated (FOGRA29)",
         profile: "FOGRA29",
         category: "offset",
@@ -62,7 +62,7 @@ const policyCatalog = [
     },
     {
         id: "US_COATED_GRACOL",
-        name: "US Coated (GRACoL 2006)",
+        name: "US Coated (GRACoL)",
         profile: "GRACoL2006",
         category: "offset",
         colorSpace: "CMYK",
@@ -90,8 +90,8 @@ const policyCatalog = [
         }
     },
     {
-        id: "NEWSPAPER",
-        name: "Newspaper (ISO 12647-3)",
+        id: "NEWSPAPER_ISO",
+        name: "ISO Newspaper",
         profile: "ISOnewspaper26v4",
         category: "newspaper",
         colorSpace: "CMYK",
@@ -104,7 +104,7 @@ const policyCatalog = [
     },
     {
         id: "DIGITAL_RGB",
-        name: "Digital RGB (sRGB)",
+        name: "Digital RGB",
         profile: "sRGB IEC61966-2.1",
         category: "digital",
         colorSpace: "RGB",
