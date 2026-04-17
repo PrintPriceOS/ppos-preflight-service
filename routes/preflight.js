@@ -144,9 +144,9 @@ async function preflightRoutes(fastify, options) {
                 // Execute Engine
                 const result = await engineInstance.autofixPdf(filePath, fixPlan);
 
-                if (result.success) {
+                if (result.ok) {
                     console.log(`[PRELIGHT][JOBS] Sync fix successful for job: ${jobId}`);
-                    const fileBuffer = await fs.readFile(result.outputPath);
+                    const fileBuffer = await fs.readFile(result.fixedPath);
                     return reply.type('application/pdf').send(fileBuffer);
                 }
                 console.error(`[PRELIGHT][ERROR] Sync fix failed: ${result.error}`);

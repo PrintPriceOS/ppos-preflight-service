@@ -28,7 +28,7 @@ module.exports = async function (fastify, opts) {
 
             const result = await AutofixCommand.run(inputPath, outputPath, config, fixHint);
 
-            if (result.success) {
+            if (result.ok) {
                 const buffer = await fs.readFile(outputPath);
                 reply
                     .header('Content-Type', 'application/pdf')
