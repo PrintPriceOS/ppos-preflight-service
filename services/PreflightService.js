@@ -4,6 +4,7 @@ const auditLogger = require('../src/services/auditLogger');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 const path = require('path');
 const fs = require('fs-extra');
+const IdentityValidator = require('../src/utils/identityValidator');
 
 /**
  * PreflightService
@@ -38,6 +39,9 @@ class PreflightService {
      * Internal helper to resolve the canonical input PDF path for a job.
      */
     async _resolveCanonicalInputPdf(tenantId, jobId, type = 'JOB') {
+        const isCanonical = IdentityValidator.isValidJobId(jobId);
+        console.log(`[SERVICE][AUTOFIX][SOURCE-ASSET] Resolving input for ${type}. ID: ${jobId} | Canonical: ${isCanonical} | Tenant: ${tenantId}`);
+
         try {
             const inputDir = this.storage.getJobSubfolder(tenantId, jobId, 'input');
             if (!(await fs.pathExists(inputDir))) {
@@ -48,10 +52,12 @@ class PreflightService {
             if (!fileName) {
                 throw new Error(`No PDF found in input subfolder for ${type} ${jobId}`);
             }
-            return path.join(inputDir, fileName);
+            const resolvedPath = path.join(inputDir, fileName);
+            console.log(`[SERVICE][AUTOFIX][RESOLVED-INPUT] Path found: ${resolvedPath} (id=${jobId})`);
+            return resolvedPath;
         } catch (err) {
             const errCode = type === 'AUTOFIX' ? 'AUTOFIX-INPUT-ERROR' : 'ANALYZE-INPUT-ERROR';
-            console.error(`[${errCode}] ${err.message} (jobId=${jobId}, tenantId=${tenantId})`);
+            console.error(`[${errCode}] ${err.message} (jobId=${jobId}, tenantId=${tenantId}, canonical=${isCanonical})`);
             throw new PPOSError(ErrorCodes.NOT_FOUND, `[${errCode}] No input PDF found for jobId=${jobId} tenantId=${tenantId}`, ErrorTypes.SERVICE_ERROR);
         }
     }
@@ -264,7 +270,7 @@ class PreflightService {
             const [existing] = await db.query("SELECT id FROM jobs WHERE idempotency_key = ? AND tenant_id = ?", [idempotencyKey, auth.tenantId]);
             if (existing) {
                 console.log(`[PRELIGHT][JOBS] Reusing existing job for idempotency key: ${idempotencyKey}`);
-                return { jobId: existing.id, status: 'QUEUED', reused: true };
+                return { jobId: existing.id, status: 'QUEUED', reused: true, sourceJobId: assetId };
             }
         }
 
@@ -313,7 +319,18 @@ class PreflightService {
 
         console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${resolvedPolicyProfile})`);
 
-        return await this.worker.enqueue('AUTOFIX', jobEnvelope);
+        const enqueueResult = await this.worker.enqueue('AUTOFIX', jobEnvelope);
+        
+        const finalResponse = {
+            ...enqueueResult,
+            id: jobId,
+            jobId: jobId,
+            sourceJobId: assetId,
+            targetJobId: jobId
+        };
+
+        console.log(`[SERVICE][AUTOFIX][RESPONSE-CONTRACT] Generated for job: ${jobId} | Source: ${assetId}`);
+        return finalResponse;
     }
 
     /**
@@ -348,6 +365,7 @@ class PreflightService {
      * Retrieves the status of a job from the database.
      */
     async getJobStatus(jobId, context) {
+        IdentityValidator.validate(jobId, 'JobStatus');
         // --- Phase 10: context normalization ---
         const safeContext = context || {};
         const { auth } = safeContext;
@@ -362,6 +380,9 @@ class PreflightService {
 
         if (!job) return null;
 
+        const canonicalId = job.id;
+        console.log(`[SERVICE][JOB][PUBLIC-ID-NORMALIZED] Mapping data for ${canonicalId} (Type: ${job.job_type})`);
+
         // Map internal result string to object if necessary
         let result = job.result;
         if (typeof result === 'string') {
@@ -369,7 +390,8 @@ class PreflightService {
         }
 
         return {
-            id: job.id,
+            id: canonicalId,
+            jobId: canonicalId,
             status: job.status,
             type: job.job_type,
             progress: job.progress || 0,
@@ -377,7 +399,7 @@ class PreflightService {
             error: job.error || null,
             createdAt: job.created_at,
             // v2.4.110: Dynamic Artifact Hydration
-            artifacts: await this.getJobArtifacts(jobId, auth.tenantId)
+            artifacts: await this.getJobArtifacts(canonicalId, auth.tenantId)
         };
     }
 

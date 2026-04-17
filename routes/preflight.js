@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const OwnershipValidator = require('../src/auth/ownershipValidator');
 const requireScope = require('../src/middleware/requireScope');
+const IdentityValidator = require('../src/utils/identityValidator');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 
 const engineModule = require('@ppos/preflight-engine');
@@ -102,6 +103,9 @@ async function preflightRoutes(fastify, options) {
                 throw new PPOSError(ErrorCodes.BAD_REQUEST, 'Missing target job/asset identifier.', ErrorTypes.USER_ERROR);
             }
 
+            // Phase 10: Strict canonical identity enforcement
+            IdentityValidator.validate(targetId, 'AutofixTarget');
+
             if (routeId && bodyAssetId && routeId !== bodyAssetId) {
                 throw new PPOSError(ErrorCodes.BAD_REQUEST, 'Route id and body asset_id do not match. Identity ambiguity rejected.', ErrorTypes.USER_ERROR);
             }
@@ -178,6 +182,9 @@ async function preflightRoutes(fastify, options) {
     fastify.get('/jobs/:id', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
         const { id: jobId } = request.params;
 
+        // Phase 10: Strict canonical identity enforcement
+        IdentityValidator.validate(jobId, 'JobFetch');
+
         try {
             const jobStatus = await service.getJobStatus(jobId, request.context);
 
@@ -201,6 +208,9 @@ async function preflightRoutes(fastify, options) {
      */
     fastify.get('/jobs/:id/artifacts/:artifactId', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
         const { id: jobId, artifactId } = request.params;
+        
+        // Phase 10: Identity validation
+        IdentityValidator.validate(jobId, 'ArtifactJob');
         const { auth } = request.context;
 
         try {
@@ -260,6 +270,9 @@ async function preflightRoutes(fastify, options) {
         const { jobId } = request.body || {};
         if (!jobId) return reply.status(400).send({ error: 'jobId is required' });
 
+        // Phase 10: Identity validation
+        IdentityValidator.validate(jobId, 'PreviewJob');
+
         const result = await service.generatePreviews(jobId, request.context);
         return result;
     });
@@ -271,6 +284,9 @@ async function preflightRoutes(fastify, options) {
     fastify.get('/preview/:jobId/:page', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
         const { auth } = request.context;
         const { jobId, page } = request.params;
+
+        // Phase 10: Identity validation
+        IdentityValidator.validate(jobId, 'PreviewPage');
 
         const previewPath = path.join(storage.getJobSubfolder(auth.tenantId, jobId, 'previews'), `p${page}.png`);
 
