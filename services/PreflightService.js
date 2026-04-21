@@ -5,6 +5,8 @@ const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 const path = require('path');
 const fs = require('fs-extra');
 const IdentityValidator = require('../src/utils/identityValidator');
+const HashUtility = require('../src/utils/hashUtility');
+
 
 /**
  * PreflightService
@@ -153,6 +155,8 @@ class PreflightService {
                 if (!(await fs.pathExists(certifiedPath))) {
                     console.log(`[CERTIFY][OUTPUT][${safeRequestId}] Promoting input as certified carrier for job: ${jobId}`);
                     await fs.copy(filePath, certifiedPath);
+                    // Mark certification basis for traceability
+                    report.certification_basis = "analysis_input";
                 }
 
                 const reportPath = path.join(artifactOutputDir, 'report.json');
@@ -308,9 +312,18 @@ class PreflightService {
         // 2. PERSIST INITIAL STATE
         console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
-            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key) 
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [jobId, tenantId, deployment?.deploymentId || 'unknown', auth?.userId || 'SYSTEM', 'AUTOFIX', 'QUEUED', idempotencyKey || null],
+            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, result) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                jobId, 
+                tenantId, 
+                deployment?.deploymentId || 'unknown', 
+                auth?.userId || 'SYSTEM', 
+                'AUTOFIX', 
+                'QUEUED', 
+                idempotencyKey || null,
+                JSON.stringify({ sourceJobId: assetId, targetJobId: jobId })
+            ],
             { tenantId, requestId: safeRequestId }
         );
 
@@ -452,14 +465,51 @@ class PreflightService {
             };
         }
 
-        // Phase 10: Artifact Integrity Verification
+        // Phase 10: Canonical Primary Artifact Resolution
         const isAutofix = job.job_type === 'AUTOFIX';
-        const hasCriticalArtifact = isAutofix 
-            ? artifacts.some(a => a.type === 'final_fixed_pdf')
-            : artifacts.some(a => a.type === 'certified_pdf');
+        const primaryArtifact = isAutofix 
+            ? artifacts.find(a => a.type === 'final_fixed_pdf')
+            : artifacts.find(a => a.type === 'certified_pdf');
 
-        if (job.status === 'COMPLETED' && !hasCriticalArtifact) {
+        const primary_artifact_type = primaryArtifact?.type || null;
+        const primary_artifact_name = primaryArtifact?.name || null;
+        
+        console.log(`[SERVICE][ARTIFACT] Primary resolved for ${job.job_type} job ${jobId}: ${primary_artifact_name} (${primary_artifact_type})`);
+
+        // Safety Guard: Force failure if primary output is missing for completed jobs
+        if (job.status === 'COMPLETED' && !primaryArtifact) {
             console.error(`[PREFLIGHT][INTEGRITY] Critical artifact missing for ${job.job_type} job ${jobId}`);
+            ok = false;
+            error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
+        }
+
+        // Autofix Effectiveness Validation (Phases 10+)
+        if (isAutofix && job.status === 'COMPLETED' && primaryArtifact && result?.autofix_effective === undefined) {
+            try {
+                // Determine source job for input comparison
+                const sourceJobId = result?.sourceJobId;
+                if (sourceJobId) {
+                    const inputPath = await this._resolveCanonicalInputPdf(auth.tenantId, sourceJobId, 'AUTOFIX');
+                    const outputPath = path.join(this.storage.getJobSubfolder(auth.tenantId, jobId, 'output'), primaryArtifact.name);
+                    
+                    const isIdentical = await HashUtility.areFilesIdentical(inputPath, outputPath);
+                    
+                    result.autofix_attempted = true;
+                    result.autofix_effective = !isIdentical;
+                    result.no_effective_changes = isIdentical;
+                    
+                    console.log(`[SERVICE][AUTOFIX][VALIDATION] Job ${jobId} Effectiveness: ${result.autofix_effective ? 'REPAIRED' : 'NO_CHANGES'} (Identical: ${isIdentical})`);
+                    
+                    // Persist validation result to avoid redundant hashing
+                    await db.execute(
+                        "UPDATE jobs SET result = ? WHERE id = ?",
+                        [JSON.stringify(result), jobId],
+                        { tenantId: auth.tenantId }
+                    );
+                }
+            } catch (err) {
+                console.error(`[SERVICE][AUTOFIX][VALIDATION-ERROR] Failed to validate effectiveness for ${jobId}: ${err.message}`);
+            }
         }
 
         return {
@@ -469,7 +519,11 @@ class PreflightService {
             status: job.status,
             type: job.job_type,
             progress: job.progress || 0,
-            result: result || {},
+            result: {
+                ...result,
+                primary_artifact_type,
+                primary_artifact_name
+            },
             error,
             partial,
             analysis_warnings,
