@@ -227,9 +227,19 @@ async function preflightRoutes(fastify, options) {
             }
 
             if (!finalPath) {
+                // Phase 10+: Contextual Error Propagation
+                // If artifact is missing, check if it's because the job failed
+                const jobStatus = await service.getJobStatus(jobId, request.context);
+                const isFailed = jobStatus?.status === 'FAILED' || jobStatus?.ok === false;
+                
+                let message = `Artifact ${artifactId} not found/accessible for job ${jobId}.`;
+                if (isFailed) {
+                    message = `Artifact ${artifactId} was not produced because the ${jobStatus.type || 'processing'} job failed. Root cause: ${jobStatus.error || 'Unknown engine failure'}.`;
+                }
+
                 return reply.status(404).send({ 
                     error: 'ARTIFACT_NOT_FOUND', 
-                    message: `Artifact ${artifactId} not found/accessible for job ${jobId}.` 
+                    message
                 });
             }
 

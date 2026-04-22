@@ -47,6 +47,8 @@ class PreflightService {
         try {
             const inputDir = this.storage.getJobSubfolder(tenantId, jobId, 'input');
             if (!(await fs.pathExists(inputDir))) {
+                // If it's an AUTOFIX type and we're looking for source input, it might be in the output of a previous job?
+                // No, current architecture assumes input is always in the 'input' folder of the referenced job.
                 throw new Error(`Input directory missing: ${inputDir}`);
             }
             const files = await fs.readdir(inputDir);
@@ -58,9 +60,18 @@ class PreflightService {
             console.log(`[SERVICE][AUTOFIX][RESOLVED-INPUT] Path found: ${resolvedPath} (id=${jobId})`);
             return resolvedPath;
         } catch (err) {
+            // Only use AUTOFIX-INPUT-ERROR if we are sure it's an input resolution failure for a NEW job
             const errCode = type === 'AUTOFIX' ? 'AUTOFIX-INPUT-ERROR' : 'ANALYZE-INPUT-ERROR';
-            console.error(`[${errCode}] ${err.message} (jobId=${jobId}, tenantId=${tenantId}, canonical=${isCanonical})`);
-            throw new PPOSError(ErrorCodes.NOT_FOUND, `[${errCode}] No input PDF found for jobId=${jobId} tenantId=${tenantId}`, ErrorTypes.SERVICE_ERROR);
+            console.error(`[SERVICE][${errCode}] Resolution failed: ${err.message} (jobId=${jobId}, tenantId=${tenantId})`);
+            
+            // If the error is already a PPOSError, just rethrow
+            if (err instanceof PPOSError) throw err;
+
+            throw new PPOSError(
+                ErrorCodes.NOT_FOUND, 
+                `[${errCode}] No input PDF found for jobId=${jobId} (Reason: ${err.message})`, 
+                ErrorTypes.SERVICE_ERROR
+            );
         }
     }
 
@@ -98,7 +109,7 @@ class PreflightService {
         const storageContext = this._normalizeStorageContext(safeContext);
         await this.storage.initializeJobStorage(storageContext, jobId);
         const { filePath } = await this.storage.saveInputFile(tenantId, jobId, fileStream, filename);
-        const stats = await require('fs-extra').stat(filePath);
+        const stats = await fs.stat(filePath);
 
         try {
             await policyEngine.validateExecution(safeContext, effectivePolicy, {
@@ -307,6 +318,7 @@ class PreflightService {
         }
 
         // 1. Resolve Asset File Reference (Fail Fast)
+        console.log(`[SERVICE][AUTOFIX][INIT] Initializing fix for asset: ${assetId}`);
         const fileUrl = await this._resolveCanonicalInputPdf(tenantId, assetId, 'AUTOFIX');
 
         // 2. PERSIST INITIAL STATE
@@ -433,8 +445,11 @@ class PreflightService {
         const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
         
         // Phase 10: Silent Failure Enforcement for Polling
+        // V2.5: Improved Error Propagation - Preserve worker-side engine failures
         let ok = result?.ok ?? (job.status === 'COMPLETED');
-        let error = job.error || null;
+        let error = job.error || result?.error || result?.code || null;
+        let message = result?.message || null;
+        
         let partial = false;
         let analysis_warnings = [];
 
@@ -442,7 +457,7 @@ class PreflightService {
             const findings = result?.findings || result?.issues || [];
             if (findings.length === 0) {
                 ok = false;
-                error = 'ANALYSIS_FAILED';
+                if (!error) error = 'ANALYSIS_FAILED';
             } else {
                 // Check for partial success (warnings only)
                 const hasErrors = findings.some(f => f.severity === 'error' || f.severity === 'critical');
@@ -477,14 +492,18 @@ class PreflightService {
         console.log(`[SERVICE][ARTIFACT] Primary resolved for ${job.job_type} job ${jobId}: ${primary_artifact_name} (${primary_artifact_type})`);
 
         // Safety Guard: Force failure if primary output is missing for completed jobs
+        // V2.5: Do NOT overwrite real engine error with generic ARTIFACT_MISSING if error already exists
         if (job.status === 'COMPLETED' && !primaryArtifact) {
             console.error(`[PREFLIGHT][INTEGRITY] Critical artifact missing for ${job.job_type} job ${jobId}`);
             ok = false;
-            error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
+            if (!error) {
+                error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
+            }
         }
 
         // Autofix Effectiveness Validation (Phases 10+)
-        if (isAutofix && job.status === 'COMPLETED' && primaryArtifact && result?.autofix_effective === undefined) {
+        // V2.5: Skip validation if the fix failed (ok=false) to avoid misleading resolution errors
+        if (isAutofix && job.status === 'COMPLETED' && ok && primaryArtifact && result?.autofix_effective === undefined) {
             try {
                 // Determine source job for input comparison
                 const sourceJobId = result?.sourceJobId;
@@ -508,7 +527,8 @@ class PreflightService {
                     );
                 }
             } catch (err) {
-                console.error(`[SERVICE][AUTOFIX][VALIDATION-ERROR] Failed to validate effectiveness for ${jobId}: ${err.message}`);
+                console.error(`[SERVICE][AUTOFIX][VALIDATION-NON-FATAL] Effectiveness check skipped for ${jobId}: ${err.message}`);
+                // V2.5: Do not crash the entire status response if validation fails (e.g. source input missing)
             }
         }
 
@@ -522,15 +542,19 @@ class PreflightService {
             result: {
                 ...result,
                 primary_artifact_type,
-                primary_artifact_name
+                primary_artifact_name,
+                error: result?.error || error,
+                message: result?.message || message
             },
             error,
+            message,
             partial,
             analysis_warnings,
             createdAt: job.created_at,
             artifacts: artifacts
         };
     }
+
 
     /**
      * getJobArtifacts
