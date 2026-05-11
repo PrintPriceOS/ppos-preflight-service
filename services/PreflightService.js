@@ -345,6 +345,18 @@ class PreflightService {
             }
         }
 
+        // Resolve CMYK target from policy when no explicit target was set.
+        // Mirrors AutofixProcessor.resolveFixPlan so inline (sync) and worker paths behave identically.
+        // NOTE: runs even when options.type is already set (e.g. 'bleed') so CMYK is chained after the primary fix.
+        if (!options.target) {
+            const policyName = typeof effectivePolicy === 'string' ? effectivePolicy : (effectivePolicy?.name || effectivePolicy?.id || policy || '');
+            const isCmykPolicy = /offset|coated|uncoated|iso|pso|cmyk/i.test(policyName);
+            if (isCmykPolicy) {
+                options = { ...options, target: 'cmyk' };
+                console.log(`[SERVICE][AUTOFIX][DERIVED] CMYK target resolved from policy: ${policyName}`);
+            }
+        }
+
         // 2. PERSIST INITIAL STATE
         console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
