@@ -321,18 +321,42 @@ class PreflightService {
         console.log(`[SERVICE][AUTOFIX][INIT] Initializing fix for asset: ${assetId}`);
         const fileUrl = await this._resolveCanonicalInputPdf(tenantId, assetId, 'AUTOFIX');
 
+        const stats = await fs.stat(fileUrl);
+
+        // Derive fix plan from source job issues when caller doesn't specify a type
+        if (!options.type && !options.repairStrategy && !options.forceBleed) {
+            try {
+                const [sourceJob] = await db.query(
+                    "SELECT result FROM jobs WHERE id = ? AND tenant_id = ?",
+                    [assetId, tenantId]
+                );
+                const sourceResult = typeof sourceJob?.result === 'string'
+                    ? JSON.parse(sourceJob.result) : sourceJob?.result || {};
+                const sourceIssues = sourceResult.findings || sourceResult.issues || [];
+                const bleedIssue = sourceIssues.find(i =>
+                    i.fix_method === 'APPLY_BLEED' || i.repairStrategy === 'APPLY_BLEED'
+                );
+                if (bleedIssue) {
+                    options = { ...options, type: 'bleed', repairStrategy: 'APPLY_BLEED' };
+                    console.log(`[SERVICE][AUTOFIX][DERIVED] Fix plan derived from source job issues: type=bleed`);
+                }
+            } catch (e) {
+                console.warn(`[SERVICE][AUTOFIX][DERIVE-WARN] Could not derive fix plan from source job: ${e.message}`);
+            }
+        }
+
         // 2. PERSIST INITIAL STATE
         console.log(`[PRELIGHT][JOBS] Creating autofix job: ${jobId} (Asset: ${assetId})`);
         await db.execute(
-            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, result) 
+            `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, result)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                jobId, 
-                tenantId, 
-                deployment?.deploymentId || 'unknown', 
-                auth?.userId || 'SYSTEM', 
-                'AUTOFIX', 
-                'QUEUED', 
+                jobId,
+                tenantId,
+                deployment?.deploymentId || 'unknown',
+                auth?.userId || 'SYSTEM',
+                'AUTOFIX',
+                'QUEUED',
                 idempotencyKey || null,
                 JSON.stringify({ sourceJobId: assetId, targetJobId: jobId })
             ],
@@ -345,8 +369,51 @@ class PreflightService {
             resourceId: jobId
         });
 
-        // 3. Orchestrate canonical AUTOFIX envelope (Worker V2 Contract)
-        const resolvedPolicyProfile = effectivePolicy.id || policy.id || policy.profileId || 'default_autofix_profile';
+        // 3a. Sync path for small files (< 5MB) — no worker required
+        if (stats.size < 5 * 1024 * 1024) {
+            console.log(`[SERVICE][AUTOFIX][SYNC] Running inline fix for job: ${jobId} (${stats.size} bytes)`);
+            try {
+                const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+                const fixResult = await this.engine.autofix(fileUrl, options, { outputDir });
+
+                const fixedPath = path.join(outputDir, 'fixed.pdf');
+                if (fixResult.ok && fixResult.fixedPath) {
+                    await fs.copy(fixResult.fixedPath, fixedPath);
+                }
+
+                const resultPayload = {
+                    sourceJobId: assetId,
+                    targetJobId: jobId,
+                    ok: fixResult.ok,
+                    repairs: fixResult.repairs || [],
+                    autofix_attempted: true
+                };
+
+                await db.execute(
+                    "UPDATE jobs SET status = ?, result = ? WHERE id = ?",
+                    [fixResult.ok ? 'COMPLETED' : 'FAILED', JSON.stringify(resultPayload), jobId],
+                    { tenantId, requestId: safeRequestId }
+                );
+
+                return {
+                    id: jobId,
+                    jobId,
+                    sourceJobId: assetId,
+                    targetJobId: jobId,
+                    ok: fixResult.ok,
+                    status: fixResult.ok ? 'COMPLETED' : 'FAILED',
+                    repairs: fixResult.repairs || []
+                };
+            } catch (err) {
+                console.error(`[SERVICE][AUTOFIX][SYNC-ERROR] ${err.message}`);
+                await db.execute("UPDATE jobs SET status = 'FAILED', error = ? WHERE id = ?",
+                    [err.message, jobId], { tenantId });
+                throw err;
+            }
+        }
+
+        // 3b. Async path for large files — delegate to worker
+        const resolvedPolicyProfile = effectivePolicy.id || policy?.id || policy?.profileId || 'default_autofix_profile';
 
         const jobEnvelope = {
             jobId,
@@ -373,7 +440,7 @@ class PreflightService {
         console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${resolvedPolicyProfile})`);
 
         const enqueueResult = await this.worker.enqueue('AUTOFIX', jobEnvelope);
-        
+
         const finalResponse = {
             ...enqueueResult,
             id: jobId,

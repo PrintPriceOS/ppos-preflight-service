@@ -129,16 +129,29 @@ async function preflightRoutes(fastify, options) {
                 const { filePath } = await storage.saveInputFile(auth.tenantId, jobId, buffer, data.filename);
 
                 // Extract Fix Plan from Fields
+                const rawIssues = data.fields?.issues?.value ? JSON.parse(data.fields.issues.value) : null;
+
+                // Derive repair type from issues when client doesn't specify explicitly
+                let derivedType = data.fields?.target?.value || null;
+                if (!derivedType && rawIssues) {
+                    const hasBleed = rawIssues.some(i => i.fix_method === 'APPLY_BLEED');
+                    const hasGeom  = rawIssues.some(i => i.fix_method === 'REBUILD_TRIMBOX');
+                    if (hasBleed)     derivedType = 'bleed';
+                    else if (hasGeom) derivedType = 'geometry';
+                }
+                derivedType = derivedType || 'cmyk';
+
                 const fixPlan = {
-                    target: data.fields?.target?.value || 'cmyk',
-                    profile: data.fields?.profile?.value || 'iso_coated_v3',
-                    bleedMm: parseFloat(data.fields?.bleedMm?.value || '3'),
+                    type:         derivedType,
+                    target:       derivedType,
+                    profile:      data.fields?.profile?.value || 'iso_coated_v3',
+                    bleedMm:      parseFloat(data.fields?.bleedMm?.value || '3'),
                     dpiPreferred: parseInt(data.fields?.dpiPreferred?.value || '300'),
-                    forceBleed: data.fields?.forceBleed?.value === '1',
-                    forceCmyk: data.fields?.forceCmyk?.value === '1',
-                    flatten: data.fields?.flatten?.value === '1',
+                    forceBleed:   derivedType === 'bleed' || data.fields?.forceBleed?.value === '1',
+                    forceCmyk:    data.fields?.forceCmyk?.value === '1',
+                    flatten:      data.fields?.flatten?.value === '1',
                     strictVector: data.fields?.strictVector?.value !== '0',
-                    issues: data.fields?.issues?.value ? JSON.parse(data.fields.issues.value) : null
+                    issues:       rawIssues
                 };
 
                 // Execute Engine
@@ -153,8 +166,7 @@ async function preflightRoutes(fastify, options) {
                 return reply.status(500).send({ error: 'AUTOFIX_EXECUTION_FAILED', message: result.error });
             } else {
                 // Async enqueue via JSON body
-                const { policy, ...rest } = request.body || {};
-                const options = rest || {};
+                const { policy, options = {} } = request.body || {};
                 const result = await service.autofix(
                     targetId,
                     policy,
