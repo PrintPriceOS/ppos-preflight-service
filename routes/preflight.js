@@ -95,7 +95,7 @@ async function preflightRoutes(fastify, options) {
         try {
             const routeId = request.params?.id;
             const bodyAssetId = (!request.isMultipart() && request.body) ? request.body.asset_id : null;
-            
+
             // Resolve targetId with deterministic fallback and mismatch detection
             const targetId = routeId || bodyAssetId;
 
@@ -135,23 +135,23 @@ async function preflightRoutes(fastify, options) {
                 let derivedType = data.fields?.target?.value || null;
                 if (!derivedType && rawIssues) {
                     const hasBleed = rawIssues.some(i => i.fix_method === 'APPLY_BLEED');
-                    const hasGeom  = rawIssues.some(i => i.fix_method === 'REBUILD_TRIMBOX');
-                    if (hasBleed)     derivedType = 'bleed';
+                    const hasGeom = rawIssues.some(i => i.fix_method === 'REBUILD_TRIMBOX');
+                    if (hasBleed) derivedType = 'bleed';
                     else if (hasGeom) derivedType = 'geometry';
                 }
                 derivedType = derivedType || 'cmyk';
 
                 const fixPlan = {
-                    type:         derivedType,
-                    target:       derivedType,
-                    profile:      data.fields?.profile?.value || 'iso_coated_v3',
-                    bleedMm:      parseFloat(data.fields?.bleedMm?.value || '3'),
+                    type: derivedType,
+                    target: derivedType,
+                    profile: data.fields?.profile?.value || 'iso_coated_v3',
+                    bleedMm: parseFloat(data.fields?.bleedMm?.value || '3'),
                     dpiPreferred: parseInt(data.fields?.dpiPreferred?.value || '300'),
-                    forceBleed:   derivedType === 'bleed' || data.fields?.forceBleed?.value === '1',
-                    forceCmyk:    data.fields?.forceCmyk?.value === '1',
-                    flatten:      data.fields?.flatten?.value === '1',
+                    forceBleed: derivedType === 'bleed' || data.fields?.forceBleed?.value === '1',
+                    forceCmyk: data.fields?.forceCmyk?.value === '1',
+                    flatten: data.fields?.flatten?.value === '1',
                     strictVector: data.fields?.strictVector?.value !== '0',
-                    issues:       rawIssues
+                    issues: rawIssues
                 };
 
                 // Execute Engine
@@ -220,7 +220,7 @@ async function preflightRoutes(fastify, options) {
      */
     fastify.get('/jobs/:id/artifacts/:artifactId', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
         const { id: jobId, artifactId } = request.params;
-        
+
         // Phase 10: Identity validation
         IdentityValidator.validate(jobId, 'ArtifactJob');
         const { auth } = request.context;
@@ -243,14 +243,14 @@ async function preflightRoutes(fastify, options) {
                 // If artifact is missing, check if it's because the job failed
                 const jobStatus = await service.getJobStatus(jobId, request.context);
                 const isFailed = jobStatus?.status === 'FAILED' || jobStatus?.ok === false;
-                
+
                 let message = `Artifact ${artifactId} not found/accessible for job ${jobId}.`;
                 if (isFailed) {
                     message = `Artifact ${artifactId} was not produced because the ${jobStatus.type || 'processing'} job failed. Root cause: ${jobStatus.error || 'Unknown engine failure'}.`;
                 }
 
-                return reply.status(404).send({ 
-                    error: 'ARTIFACT_NOT_FOUND', 
+                return reply.status(404).send({
+                    error: 'ARTIFACT_NOT_FOUND',
                     message
                 });
             }
@@ -270,7 +270,7 @@ async function preflightRoutes(fastify, options) {
 
             const contentType = mimeTypes[ext] || 'application/octet-stream';
             reply.type(contentType);
-            
+
             // Enforce attachment for binaries or PDFs to ensure browser safety
             if (contentType === 'application/octet-stream' || ext === '.pdf') {
                 reply.header('Content-Disposition', `attachment; filename="${artifactId}"`);
@@ -319,6 +319,65 @@ async function preflightRoutes(fastify, options) {
         const buffer = await fs.readFile(previewPath);
         return reply.type('image/png').send(buffer);
     });
+
+
+    /**
+     * GET /api/preflight/batches
+     * Compatibility endpoint for Control Plane batch polling.
+     * Batch orchestration is optional in this service build; return a controlled
+     * empty registry instead of Fastify route-not-found so clients can degrade cleanly.
+     */
+    fastify.get('/batches', { preHandler: [requireScope('preflight:read')] }, async (request, reply) => {
+        return {
+            ok: true,
+            batches: [],
+            total: 0,
+            status: 'BATCH_REGISTRY_EMPTY',
+            message: 'Batch registry is available, but no batches are currently registered.'
+        };
+    });
+
+    /**
+     * POST /api/preflight/batches
+     * Controlled compatibility endpoint. Full multi-file batch creation may be
+     * implemented by a dedicated orchestration module; until then, fail with a
+     * precise 501 rather than an ambiguous 404.
+     */
+    fastify.post('/batches', { preHandler: [requireScope('preflight:write')] }, async (request, reply) => {
+        return reply.status(501).send({
+            ok: false,
+            error: 'BATCH_CREATE_NOT_IMPLEMENTED',
+            message: 'Batch creation is not enabled in this preflight-service build.'
+        });
+    });
+
+    /**
+     * GET /api/preflight/batches/:batchId
+     * Controlled compatibility endpoint for batch details.
+     */
+    fastify.get('/batches/:batchId', { preHandler: [requireScope('preflight:read')] }, async (request, reply) => {
+        return reply.status(404).send({
+            ok: false,
+            error: 'BATCH_NOT_FOUND',
+            batchId: request.params.batchId,
+            message: 'Batch not found or batch registry is empty.'
+        });
+    });
+
+    /**
+     * GET /api/preflight/batches/:batchId/jobs
+     * Controlled compatibility endpoint for batch job listing.
+     */
+    fastify.get('/batches/:batchId/jobs', { preHandler: [requireScope('preflight:read')] }, async (request, reply) => {
+        return {
+            ok: true,
+            batchId: request.params.batchId,
+            jobs: [],
+            total: 0,
+            status: 'BATCH_REGISTRY_EMPTY'
+        };
+    });
+
     /**
      * LEGACY ENDPOINTS (Isolated/Deprecated)
      */

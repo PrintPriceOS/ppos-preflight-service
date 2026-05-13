@@ -1,37 +1,75 @@
 /**
- * PrintPrice OS — Authorization Service (v1.9.5)
- * 
+ * PrintPrice OS — Authorization Service (v1.9.6)
+ *
  * Enforces permissions based on:
  * 1. User Roles & Scopes
  * 2. Deployment Contract Governance Posture
+ *
+ * v1.9.6 patch:
+ * - Adds canonical scope aliases for Control Plane preflight flows.
+ * - Allows SUPER_ADMIN/admin style roles to pass preflight job read/write routes.
+ * - Keeps tenant isolation and deployment governance checks intact.
  */
 
 const ROLE_SCOPES = {
     admin: [
-        'preflight:read', 'preflight:write', 
-        'jobs:read', 'jobs:delete', 
-        'admin:read', 'admin:write', 
+        'preflight:read', 'preflight:write',
+        'jobs:read', 'jobs:write', 'jobs:fix', 'jobs:delete',
+        'admin:read', 'admin:write',
+        'governance:read', 'governance:write'
+    ],
+    super_admin: [
+        'preflight:read', 'preflight:write',
+        'jobs:read', 'jobs:write', 'jobs:fix', 'jobs:delete',
+        'admin:preflight', 'admin:read', 'admin:write',
         'governance:read', 'governance:write'
     ],
     tenant_admin: [
-        'preflight:read', 'preflight:write', 
-        'jobs:read', 'jobs:delete', 
+        'preflight:read', 'preflight:write',
+        'jobs:read', 'jobs:write', 'jobs:fix', 'jobs:delete',
         'governance:read'
     ],
     member: [
-        'preflight:read', 'preflight:write', 
-        'jobs:read'
+        'preflight:read', 'preflight:write',
+        'jobs:read', 'jobs:write', 'jobs:fix'
     ],
     viewer: [
-        'preflight:read', 
+        'preflight:read',
         'jobs:read'
     ],
     support_operator: [
-        'preflight:read', 
-        'jobs:read', 
+        'preflight:read',
+        'jobs:read',
         'admin:read'
     ]
 };
+
+const SCOPE_ALIASES = {
+    'jobs:read': ['jobs:read', 'preflight:read', 'admin:preflight'],
+    'jobs:write': ['jobs:write', 'preflight:write', 'admin:preflight'],
+    'jobs:fix': ['jobs:fix', 'preflight:write', 'admin:preflight'],
+    'jobs:delete': ['jobs:delete', 'preflight:write', 'admin:preflight'],
+    'preflight:read': ['preflight:read', 'jobs:read', 'admin:preflight'],
+    'preflight:write': ['preflight:write', 'jobs:write', 'jobs:fix', 'admin:preflight']
+};
+
+const ADMIN_ROLES = new Set(['admin', 'super_admin', 'superadmin', 'system_admin', 'owner']);
+
+function normalizeRole(role) {
+    return String(role || '').trim().toLowerCase();
+}
+
+function normalizeScopes(scopes) {
+    if (Array.isArray(scopes)) return scopes.map(String).filter(Boolean);
+    if (typeof scopes === 'string') {
+        return scopes.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function getAcceptedScopes(requiredScope) {
+    return SCOPE_ALIASES[requiredScope] || [requiredScope];
+}
 
 class AuthorizationService {
     /**
@@ -40,32 +78,55 @@ class AuthorizationService {
      * @param {string} requiredScope - Scope being requested
      */
     isAuthorized(context, requiredScope) {
-        const { auth } = context;
-        
+        const { auth } = context || {};
+
         if (!auth) return false;
 
+        const traceId = context?.requestId ? `[${context.requestId}] ` : '';
+        const acceptedScopes = getAcceptedScopes(requiredScope);
+        const jwtScopes = normalizeScopes(auth.scopes || auth.scope);
+
         // 1. Direct JWT Scope Validation (Highest Precedence)
-        if (Array.isArray(auth.scopes)) {
-            // Wildcard support
-            if (auth.scopes.includes('*')) return true;
-            // Exact match support
-            if (auth.scopes.includes(requiredScope)) return true;
+        if (jwtScopes.includes('*')) return true;
+
+        const matchedJwtScope = acceptedScopes.find(scope => jwtScopes.includes(scope));
+        if (matchedJwtScope) {
+            if (matchedJwtScope !== requiredScope) {
+                console.log(`${traceId}[AUTHZ][ALIAS-MATCH] required=${requiredScope} matched=${matchedJwtScope}`);
+            }
+            return true;
         }
 
         // 2. Role-based Scope Fallback
         if (!auth.role) return false;
-        const normalizedRole = auth.role.toLowerCase();
+        const normalizedRole = normalizeRole(auth.role);
+
+        // SUPER_ADMIN style roles are allowed for preflight/job admin routes, but still pass
+        // through deployment governance checks below.
+        const isAdminRole = ADMIN_ROLES.has(normalizedRole);
+        const isPreflightScope = acceptedScopes.some(scope =>
+            scope.startsWith('preflight:') || scope.startsWith('jobs:') || scope === 'admin:preflight'
+        );
+
+        if (isAdminRole && isPreflightScope) {
+            console.log(`${traceId}[AUTHZ][ROLE-FALLBACK] role=${auth.role} required=${requiredScope}`);
+            return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
+        }
+
         const userScopes = ROLE_SCOPES[normalizedRole] || [];
-        
-        const roleHasScope = userScopes.includes(requiredScope);
+        const matchedRoleScope = acceptedScopes.find(scope => userScopes.includes(scope));
+        const roleHasScope = Boolean(matchedRoleScope);
+
         if (roleHasScope) {
-             // 3. Deployment Contract-Aware Governance Logic
-             return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
+            if (matchedRoleScope !== requiredScope) {
+                console.log(`${traceId}[AUTHZ][ROLE-ALIAS-MATCH] required=${requiredScope} matched=${matchedRoleScope} role=${auth.role}`);
+            }
+            // 3. Deployment Contract-Aware Governance Logic
+            return this.isPermittedByContract({ ...context, auth: { ...auth, role: normalizedRole } }, requiredScope);
         }
 
         // [AUTHZ-DEBUG] Log scope DENY before returning false
-        const traceId = context?.requestId ? `[${context.requestId}] ` : '';
-        console.warn(`${traceId}[AUTHZ-DEBUG] Scope match failed: required=${requiredScope}, authRole=${auth.role}, authScopes=${JSON.stringify(auth.scopes)}, jwtScopeMatch=${Array.isArray(auth.scopes) && auth.scopes.includes(requiredScope)}, roleFallback=${roleHasScope}`);
+        console.warn(`${traceId}[AUTHZ-DEBUG] Scope match failed: required=${requiredScope}, accepted=${JSON.stringify(acceptedScopes)}, authRole=${auth.role}, authScopes=${JSON.stringify(jwtScopes)}, jwtScopeMatch=${Boolean(matchedJwtScope)}, roleFallback=${roleHasScope}`);
 
         return false;
     }
@@ -75,7 +136,7 @@ class AuthorizationService {
      * Some actions may be blocked regardless of role/scope.
      */
     isPermittedByContract(context, requiredScope) {
-        const { auth, deployment } = context;
+        const { auth, deployment = {} } = context || {};
 
         // RULE: customer_managed deployments restrict provider-led intervention/introspection
         if (deployment.supportModel === 'customer_managed') {
@@ -84,23 +145,11 @@ class AuthorizationService {
                 console.warn(`[AUTH-GOVERNANCE] Support Operator blocked from WRITE in customer_managed deployment ${deployment.deploymentId}`);
                 return false;
             }
-            
-            // Global Admin READS might still be allowed if it's the provider's platform, 
-            // BUT "introspection" (seeing specific tenant data) from the provider side should be limited 
-            // if the policy dictates "perimeter only".
-            if (auth.role === 'support_operator' && requiredScope === 'admin:read' && request.url?.includes('/tenants/')) {
-                 // In a real scenario, we'd check if they are trying to drill down into a tenant they don't own.
-            }
-        }
-
-        // RULE: provider_managed deployments allow broader intervention
-        if (deployment.supportModel === 'provider_managed') {
-             // Broader system state visibility is typically allowed here.
         }
 
         // RULE: manual_approval_only mode blocks direct governance changes
         if (deployment.upgradeMode === 'manual_approval_only') {
-            if (requiredScope === 'governance:write' && auth.role !== 'admin') {
+            if (requiredScope === 'governance:write' && auth.role !== 'admin' && auth.role !== 'super_admin') {
                 console.warn(`[AUTH-GOVERNANCE] Direct governance write blocked for role ${auth.role} in manual_approval_only deployment.`);
                 return false;
             }
@@ -108,7 +157,7 @@ class AuthorizationService {
 
         // RULE: multi_tenant_managed_cloud restricts destructive operations for non-admins
         if (deployment.profile === 'multi_tenant_managed_cloud') {
-            if (requiredScope === 'jobs:delete' && !['admin', 'tenant_admin'].includes(auth.role)) {
+            if (requiredScope === 'jobs:delete' && !['admin', 'super_admin', 'tenant_admin'].includes(auth.role)) {
                 return false;
             }
         }
@@ -120,15 +169,27 @@ class AuthorizationService {
      * Returns the failure reason for debugging/auditing.
      */
     getReason(context, requiredScope) {
-        const { auth, deployment } = context;
+        const { auth, deployment = {} } = context || {};
         if (!auth || !auth.role) return 'Unauthenticated';
-        
-        const userScopes = ROLE_SCOPES[auth.role] || [];
-        if (!userScopes.includes(requiredScope)) {
-            return `Role ${auth.role} lacks scope ${requiredScope}`;
+
+        const acceptedScopes = getAcceptedScopes(requiredScope);
+        const jwtScopes = normalizeScopes(auth.scopes || auth.scope);
+        const normalizedRole = normalizeRole(auth.role);
+        const userScopes = ROLE_SCOPES[normalizedRole] || [];
+        const isAdminRole = ADMIN_ROLES.has(normalizedRole);
+        const isPreflightScope = acceptedScopes.some(scope =>
+            scope.startsWith('preflight:') || scope.startsWith('jobs:') || scope === 'admin:preflight'
+        );
+
+        if (jwtScopes.includes('*') || acceptedScopes.some(scope => jwtScopes.includes(scope))) {
+            return `Authorized by scope alias for ${requiredScope}`;
         }
 
-        return `Governance policy for deployment profile ${deployment.profile} restricts this action.`;
+        if ((isAdminRole && isPreflightScope) || acceptedScopes.some(scope => userScopes.includes(scope))) {
+            return `Governance policy for deployment profile ${deployment.profile || 'unknown'} restricts this action.`;
+        }
+
+        return `Role ${auth.role} lacks scope ${requiredScope}; accepted scopes: ${acceptedScopes.join(', ')}`;
     }
 }
 
