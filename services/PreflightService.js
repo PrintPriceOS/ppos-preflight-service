@@ -155,19 +155,33 @@ class PreflightService {
                 const elapsed = Date.now() - start;
                 console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
 
-                // Phase 10: Silent Failure Prevention (Contract Enforcement)
+                // Phase 10: Silent Failure Prevention & Runtime Extraction Verification
+                const missingToolsCheck = Array.isArray(report?.missing_tools) ? report.missing_tools :
+                     Array.isArray(report?.forensics?.missing_tools) ? report.forensics.missing_tools :
+                     Array.isArray(report?.analysis?.missing_tools) ? report.analysis.missing_tools :
+                     Array.isArray(report?.environment?.missing_tools) ? report.environment.missing_tools :
+                     Array.isArray(report?.meta?.missing_tools) ? report.meta.missing_tools :
+                     (typeof report?.missing_tools === 'string' ? [report.missing_tools] : []);
+                
+                const hasEnvFailure = missingToolsCheck.length > 0 || 
+                    report?.error?.includes('ENVIRONMENT') || 
+                    report?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
+                    report?.analysis_type === 'DEGRADED';
+
                 const findings = report.findings || report.issues || [];
-                const finalStatus = findings.length > 0 ? 'COMPLETED' : 'FAILED';
-                const finalOk = findings.length > 0;
+                const finalOk = findings.length > 0 && !hasEnvFailure;
 
                 const artifactOutputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
                 const certifiedPath = path.join(artifactOutputDir, 'certified.pdf');
 
-                if (!(await fs.pathExists(certifiedPath))) {
-                    console.log(`[CERTIFY][OUTPUT][${safeRequestId}] Promoting input as certified carrier for job: ${jobId}`);
-                    await fs.copy(filePath, certifiedPath);
-                    // Mark certification basis for traceability
-                    report.certification_basis = "analysis_input";
+                if (!hasEnvFailure && finalOk) {
+                    if (!(await fs.pathExists(certifiedPath))) {
+                        console.log(`[CERTIFY][OUTPUT][${safeRequestId}] Promoting input as certified carrier for job: ${jobId}`);
+                        await fs.copy(filePath, certifiedPath);
+                        report.certification_basis = "analysis_input";
+                    }
+                } else {
+                    console.warn(`[CERTIFY][BLOCKED] Certification blocked for job ${jobId} due to invalid runtime extraction or analysis failure.`);
                 }
 
                 const reportPath = path.join(artifactOutputDir, 'report.json');
@@ -183,45 +197,38 @@ class PreflightService {
                     console.error(`[PREFLIGHT][INTEGRITY] Missing critical artifacts for job ${jobId}`);
                 }
 
+                const jobObjForNorm = {
+                    id: jobId,
+                    status: hasEnvFailure ? 'FAILED' : (finalOk ? 'COMPLETED' : 'FAILED'),
+                    job_type: 'ANALYZE',
+                    error: report.error || (hasEnvFailure ? 'ENGINE_ENVIRONMENT_FAILURE' : null)
+                };
+
+                const normalizedPayload = this._normalizeJobPayload(jobObjForNorm, artifacts, {
+                    ...report,
+                    ok: finalOk,
+                    type: 'ANALYZE',
+                    artifacts: artifacts.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})
+                });
+
                 await db.execute(
                     "UPDATE jobs SET status = ?, input_bytes = ?, result = ? WHERE id = ?",
                     [
-                        finalOk ? 'COMPLETED' : 'FAILED', 
+                        jobObjForNorm.status,
                         stats.size, 
-                        JSON.stringify({ 
-                            ...report, 
-                            ok: finalOk,
-                            type: 'ANALYZE', 
-                            artifacts: artifacts.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {}) 
-                        }), 
+                        JSON.stringify(normalizedPayload.result), 
                         jobId
                     ],
                     { tenantId, requestId: safeRequestId }
                 );
 
-                if (!finalOk) {
-                    return {
-                        id: jobId,
-                        jobId,
-                        ok: false,
-                        status: 'FAILED',
-                        error: 'ANALYSIS_FAILED',
-                        message: 'Engine returned no findings. Verification required.',
-                        findings: []
-                    };
-                }
-
                 return {
+                    ...normalizedPayload,
+                    ...normalizedPayload.result,
                     id: jobId,
                     jobId,
-                    ok: true,
-                    status: 'COMPLETED',
-                    ...report,
-                    meta: {
-                        ...(report?.meta || {}),
-                        jobId,
-                        tenantId
-                    }
+                    ok: normalizedPayload.ok,
+                    status: normalizedPayload.status
                 };
             } catch (err) {
                 if (err.message === 'ENGINE_ANALYSIS_TIMEOUT') {
@@ -322,6 +329,38 @@ class PreflightService {
         const fileUrl = await this._resolveCanonicalInputPdf(tenantId, assetId, 'AUTOFIX');
 
         const stats = await fs.stat(fileUrl);
+
+        // 1b. Check Source Job Analysis Integrity (Block if runtime extraction was invalid)
+        try {
+            const [sourceJobRow] = await db.query(
+                "SELECT status, error, result FROM jobs WHERE id = ? AND tenant_id = ?",
+                [assetId, tenantId]
+            );
+            if (sourceJobRow) {
+                const sourceResult = typeof sourceJobRow.result === 'string'
+                    ? JSON.parse(sourceJobRow.result) : sourceJobRow.result || {};
+                
+                const missingToolsSource = Array.isArray(sourceResult?.missing_tools) ? sourceResult.missing_tools :
+                     Array.isArray(sourceResult?.forensics?.missing_tools) ? sourceResult.forensics.missing_tools :
+                     Array.isArray(sourceResult?.analysis?.missing_tools) ? sourceResult.analysis.missing_tools :
+                     Array.isArray(sourceResult?.environment?.missing_tools) ? sourceResult.environment.missing_tools :
+                     Array.isArray(sourceResult?.meta?.missing_tools) ? sourceResult.meta.missing_tools :
+                     (typeof sourceResult?.missing_tools === 'string' ? [sourceResult.missing_tools] : []);
+                
+                const hasEnvFailure = missingToolsSource.length > 0 || 
+                    sourceJobRow.error?.includes('ENVIRONMENT') || 
+                    sourceResult?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
+                    sourceResult?.analysis_type === 'DEGRADED';
+                
+                if (hasEnvFailure) {
+                    console.warn(`[SERVICE][AUTOFIX][BLOCKED] Autofix blocked for asset ${assetId} due to invalid runtime extraction/environment failure.`);
+                    throw new PPOSError(ErrorCodes.BAD_REQUEST, `Autofix blocked: Source job ${assetId} failed runtime environment validation/extraction fidelity.`, ErrorTypes.USER_ERROR);
+                }
+            }
+        } catch (err) {
+            if (err.isPPOSError || err.code === 'BAD_REQUEST') throw err;
+            console.warn(`[SERVICE][AUTOFIX][CHECK-WARN] Could not check source job integrity: ${err.message}`);
+        }
 
         // Derive fix plan from source job issues when caller doesn't specify a type
         if (!options.type && !options.repairStrategy && !options.forceBleed) {
@@ -523,32 +562,8 @@ class PreflightService {
 
         const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
         
-        // Phase 10: Silent Failure Enforcement for Polling
-        // V2.5: Improved Error Propagation - Preserve worker-side engine failures
-        let ok = result?.ok ?? (job.status === 'COMPLETED');
-        let error = job.error || result?.error || result?.code || null;
-        let message = result?.message || null;
-        
-        let partial = false;
-        let analysis_warnings = [];
-
-        if (job.status === 'COMPLETED' && job.job_type === 'ANALYZE') {
-            const findings = result?.findings || result?.issues || [];
-            if (findings.length === 0) {
-                ok = false;
-                if (!error) error = 'ANALYSIS_FAILED';
-            } else {
-                // Check for partial success (warnings only)
-                const hasErrors = findings.some(f => f.severity === 'error' || f.severity === 'critical');
-                if (!hasErrors) {
-                    partial = true;
-                    analysis_warnings = findings;
-                }
-            }
-        }
-
         // Phase 10: Timeout Detection for Polling
-        if (job.status === 'FAILED' && error === 'TIMEOUT') {
+        if (job.status === 'FAILED' && (job.error === 'TIMEOUT' || result?.error === 'TIMEOUT')) {
             return {
                 id: canonicalId,
                 jobId: canonicalId,
@@ -559,7 +574,7 @@ class PreflightService {
             };
         }
 
-        // Phase 10: Canonical Primary Artifact Resolution
+        // Canonical Primary Artifact Resolution
         const isAutofix = job.job_type === 'AUTOFIX';
         const primaryArtifact = isAutofix 
             ? artifacts.find(a => a.type === 'final_fixed_pdf')
@@ -570,68 +585,60 @@ class PreflightService {
         
         console.log(`[SERVICE][ARTIFACT] Primary resolved for ${job.job_type} job ${jobId}: ${primary_artifact_name} (${primary_artifact_type})`);
 
-        // Safety Guard: Force failure if primary output is missing for completed jobs
-        // V2.5: Do NOT overwrite real engine error with generic ARTIFACT_MISSING if error already exists
-        if (job.status === 'COMPLETED' && !primaryArtifact) {
+        let safeResult = result || {};
+        safeResult.primary_artifact_type = primary_artifact_type;
+        safeResult.primary_artifact_name = primary_artifact_name;
+
+        // Verify environment failure to avoid overwriting error with generic ARTIFACT_MISSING
+        const missingToolsPolled = Array.isArray(safeResult?.missing_tools) ? safeResult.missing_tools :
+             Array.isArray(safeResult?.forensics?.missing_tools) ? safeResult.forensics.missing_tools :
+             Array.isArray(safeResult?.analysis?.missing_tools) ? safeResult.analysis.missing_tools :
+             Array.isArray(safeResult?.environment?.missing_tools) ? safeResult.environment.missing_tools :
+             Array.isArray(safeResult?.meta?.missing_tools) ? safeResult.meta.missing_tools :
+             (typeof safeResult?.missing_tools === 'string' ? [safeResult.missing_tools] : []);
+        
+        const isEnvFailPolled = missingToolsPolled.length > 0 || 
+            job.error?.includes('ENVIRONMENT') || 
+            safeResult?.error?.includes('ENVIRONMENT') ||
+            safeResult?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
+            safeResult?.analysis_type === 'DEGRADED';
+
+        if (job.status === 'COMPLETED' && !primaryArtifact && !isEnvFailPolled) {
             console.error(`[PREFLIGHT][INTEGRITY] Critical artifact missing for ${job.job_type} job ${jobId}`);
-            ok = false;
-            if (!error) {
-                error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
+            if (!safeResult.error && !job.error) {
+                safeResult.error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
             }
         }
 
         // Autofix Effectiveness Validation (Phases 10+)
-        // V2.5: Skip validation if the fix failed (ok=false) to avoid misleading resolution errors
-        if (isAutofix && job.status === 'COMPLETED' && ok && primaryArtifact && result?.autofix_effective === undefined) {
+        let okPolled = safeResult?.ok ?? (job.status === 'COMPLETED');
+        if (isAutofix && job.status === 'COMPLETED' && okPolled && primaryArtifact && safeResult?.autofix_effective === undefined) {
             try {
-                // Determine source job for input comparison
-                const sourceJobId = result?.sourceJobId;
+                const sourceJobId = safeResult?.sourceJobId;
                 if (sourceJobId) {
                     const inputPath = await this._resolveCanonicalInputPdf(auth.tenantId, sourceJobId, 'AUTOFIX');
                     const outputPath = path.join(this.storage.getJobSubfolder(auth.tenantId, jobId, 'output'), primaryArtifact.name);
                     
                     const isIdentical = await HashUtility.areFilesIdentical(inputPath, outputPath);
                     
-                    result.autofix_attempted = true;
-                    result.autofix_effective = !isIdentical;
-                    result.no_effective_changes = isIdentical;
+                    safeResult.autofix_attempted = true;
+                    safeResult.autofix_effective = !isIdentical;
+                    safeResult.no_effective_changes = isIdentical;
                     
-                    console.log(`[SERVICE][AUTOFIX][VALIDATION] Job ${jobId} Effectiveness: ${result.autofix_effective ? 'REPAIRED' : 'NO_CHANGES'} (Identical: ${isIdentical})`);
+                    console.log(`[SERVICE][AUTOFIX][VALIDATION] Job ${jobId} Effectiveness: ${safeResult.autofix_effective ? 'REPAIRED' : 'NO_CHANGES'} (Identical: ${isIdentical})`);
                     
-                    // Persist validation result to avoid redundant hashing
                     await db.execute(
                         "UPDATE jobs SET result = ? WHERE id = ?",
-                        [JSON.stringify(result), jobId],
+                        [JSON.stringify(safeResult), jobId],
                         { tenantId: auth.tenantId }
                     );
                 }
             } catch (err) {
                 console.error(`[SERVICE][AUTOFIX][VALIDATION-NON-FATAL] Effectiveness check skipped for ${jobId}: ${err.message}`);
-                // V2.5: Do not crash the entire status response if validation fails (e.g. source input missing)
             }
         }
 
-        return {
-            id: canonicalId,
-            jobId: canonicalId,
-            ok,
-            status: job.status,
-            type: job.job_type,
-            progress: job.progress || 0,
-            result: {
-                ...result,
-                primary_artifact_type,
-                primary_artifact_name,
-                error: result?.error || error,
-                message: result?.message || message
-            },
-            error,
-            message,
-            partial,
-            analysis_warnings,
-            createdAt: job.created_at,
-            artifacts: artifacts
-        };
+        return this._normalizeJobPayload(job, artifacts, safeResult);
     }
 
 
@@ -703,6 +710,157 @@ class PreflightService {
         // Return the full production-ready catalog
         return {
             policies: policyCatalog
+        };
+    }
+
+    /**
+     * _normalizeJobPayload
+     * Enforces strict API normalization for job payloads and Control Plane compatibility adapters.
+     * Prevents contradictory invariant states, deduplicates findings, and implements separate counters.
+     */
+    _normalizeJobPayload(job, artifacts, rawResult) {
+        const canonicalId = job?.id || job?.jobId || 'unknown';
+        const res = rawResult || {};
+
+        // 1. Comprehensive missing_tools extraction
+        const missingToolsRaw = Array.isArray(res.missing_tools) ? res.missing_tools :
+                             Array.isArray(res.forensics?.missing_tools) ? res.forensics.missing_tools :
+                             Array.isArray(res.analysis?.missing_tools) ? res.analysis.missing_tools :
+                             Array.isArray(res.environment?.missing_tools) ? res.environment.missing_tools :
+                             Array.isArray(res.meta?.missing_tools) ? res.meta.missing_tools :
+                             (typeof res.missing_tools === 'string' ? [res.missing_tools] : []);
+        const missingTools = [...new Set(missingToolsRaw)];
+        const hasMissingTools = missingTools.length > 0;
+
+        // 2. Runtime Errors aggregation
+        const runtimeErrorsRaw = [];
+        if (job?.error) runtimeErrorsRaw.push(job.error);
+        if (res.error && res.error !== job?.error) runtimeErrorsRaw.push(res.error);
+        if (res.code && res.code !== job?.error && res.code !== res.error) runtimeErrorsRaw.push(res.code);
+        if (res.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' || res.status === 'FAILED_RUNTIME_ENVIRONMENT') {
+            runtimeErrorsRaw.push('FAILED_RUNTIME_ENVIRONMENT');
+        }
+        const runtimeErrors = [...new Set(runtimeErrorsRaw)];
+
+        // 3. Environment/Runtime failure detection
+        const isEnvFailure = hasMissingTools || runtimeErrors.some(e => 
+            e?.includes('ENVIRONMENT') || e?.includes('TOOL') || e === 'FAILED_RUNTIME_ENVIRONMENT'
+        );
+
+        // Deduplicate findings: document findings only
+        let rawFindings = Array.isArray(res.findings) && res.findings.length > 0 ? res.findings :
+                          Array.isArray(res.issues) && res.issues.length > 0 ? res.issues :
+                          Array.isArray(res.analysis?.issues) && res.analysis.issues.length > 0 ? res.analysis.issues :
+                          Array.isArray(res.forensics?.findings) && res.forensics.findings.length > 0 ? res.forensics.findings :
+                          [];
+        
+        const documentFindings = rawFindings.filter(f => 
+            !f.isEnvironmentError && 
+            f.type !== 'ENVIRONMENT' && 
+            !f.code?.includes('TOOL') &&
+            !f.message?.includes('missing binary')
+        );
+
+        // Enforce invariants and log warnings if raw payload was contradictory
+        const rawDegradedMode = res.analysisIntegrity?.degradedMode ?? res.degradedMode;
+        const rawExtractionFidelity = res.analysisIntegrity?.extractionFidelity ?? res.extractionFidelity ?? res.extraction_fidelity;
+        const rawAnalysisStatus = res.analysis_status ?? res.status ?? job?.status;
+
+        if (isEnvFailure) {
+            if (rawDegradedMode === false || rawExtractionFidelity === 'REAL_EXTRACTION' || rawAnalysisStatus === 'COMPLETED' || rawAnalysisStatus === 'PASS') {
+                console.warn(`[SERVICE][CONTRACT][INVARIANT-VIOLATION] Contradictory payload detected. Missing tools present but received degradedMode=${rawDegradedMode}, fidelity=${rawExtractionFidelity}. Overwriting to enforce invariants.`);
+            }
+            console.log(`[SERVICE][ANALYSIS-INTEGRITY][DEGRADED] Enforcing degraded integrity invariants due to missing tools/environment failure.`);
+            console.log(`[SERVICE][NORMALIZE][ENVIRONMENT-FAILURE] Normalizing result payload to FAILED_RUNTIME_ENVIRONMENT.`);
+        }
+
+        // Establish outcome category
+        let outcomeCategory = 'SUCCESS';
+        if (isEnvFailure) {
+            outcomeCategory = 'ENVIRONMENT_FAILURE';
+        } else if (documentFindings.some(f => f.severity === 'error' || f.severity === 'critical')) {
+            outcomeCategory = 'PDF_DOCUMENT_FAILURE';
+        } else if (documentFindings.length > 0) {
+            outcomeCategory = 'SUCCESS_WITH_FINDINGS';
+        }
+
+        // Enforce fidelity and score basis
+        const extractionFidelity = isEnvFailure ? 'DEGRADED' : (rawExtractionFidelity || 'REAL_EXTRACTION');
+        const scoreBasis = isEnvFailure ? 'ENVIRONMENT_FAILURE' : (documentFindings.length > 0 ? 'DOCUMENT_FINDINGS' : 'CLEAN');
+        const certifiable = !isEnvFailure && documentFindings.every(f => f.severity !== 'critical' && f.severity !== 'error');
+        const certificationBlockedReason = isEnvFailure ? 
+            `Runtime environment validation failed. Missing required tools: ${missingTools.join(', ') || 'industrial binaries'}` :
+            (!certifiable ? 'Document contains unrectified critical defects or errors.' : null);
+
+        // Normalize Risk Score
+        const baseRiskScore = res.summary?.risk_score ?? res.risk_score ?? 100;
+        const riskScore = isEnvFailure ? 0 : baseRiskScore;
+
+        // Build cleanly structured summary
+        const summary = {
+            ...(res.summary || {}),
+            issue_count: documentFindings.length,
+            environment_errors: isEnvFailure ? Math.max(missingTools.length, 1) : 0,
+            risk_score: riskScore
+        };
+
+        const analysisIntegrity = {
+            degradedMode: isEnvFailure,
+            realExtraction: !isEnvFailure,
+            certifiable,
+            extractionFidelity,
+            scoreBasis
+        };
+
+        // Construct pristine result envelope without repeated/duplicated full finding arrays
+        const normalizedResult = {
+            ...res,
+            ok: !isEnvFailure && (res.ok ?? (documentFindings.length > 0 || outcomeCategory === 'SUCCESS')),
+            analysis_type: isEnvFailure ? 'DEGRADED' : (res.analysis_type || job?.job_type || 'ANALYZE'),
+            analysis_status: isEnvFailure ? 'FAILED_RUNTIME_ENVIRONMENT' : (documentFindings.length > 0 ? 'COMPLETED_WITH_FINDINGS' : 'COMPLETED'),
+            outcome_category: outcomeCategory,
+            runtimeErrors,
+            missingTools,
+            extractionFidelity,
+            scoreBasis,
+            certificationBlockedReason,
+            analysisIntegrity,
+            summary,
+            findings: documentFindings
+        };
+
+        // Explicitly remove redundant repeated finding arrays
+        delete normalizedResult.issues;
+        if (normalizedResult.analysis) {
+            delete normalizedResult.analysis.issues;
+        }
+        if (normalizedResult.forensics) {
+            delete normalizedResult.forensics.findings;
+        }
+
+        // Resolve top-level status
+        const finalJobStatus = isEnvFailure ? 'FAILED' : (job?.status || 'COMPLETED');
+        const finalError = isEnvFailure ? (runtimeErrors[0] || 'ENGINE_ENVIRONMENT_FAILURE') : (normalizedResult.error || job?.error || null);
+
+        // Determine if partial analysis occurred
+        const hasErrors = documentFindings.some(f => f.severity === 'error' || f.severity === 'critical');
+        const partial = !isEnvFailure && documentFindings.length > 0 && !hasErrors;
+        const analysis_warnings = partial ? documentFindings : [];
+
+        return {
+            id: canonicalId,
+            jobId: canonicalId,
+            ok: normalizedResult.ok,
+            status: finalJobStatus,
+            type: job?.job_type || normalizedResult.analysis_type,
+            progress: job?.progress || (finalJobStatus === 'COMPLETED' ? 100 : 0),
+            result: normalizedResult,
+            error: finalError,
+            message: normalizedResult.message || (isEnvFailure ? 'Runtime environment validation failed.' : null),
+            partial,
+            analysis_warnings,
+            createdAt: job?.created_at || new Date().toISOString(),
+            artifacts: artifacts || []
         };
     }
 }

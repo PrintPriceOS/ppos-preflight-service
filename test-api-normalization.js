@@ -1,0 +1,145 @@
+/**
+ * API Normalization & Integrity Verification
+ * Verifies that PreflightService enforces strict canonical integrity invariants,
+ * eliminates payload duplications, separates environmental failures from document errors,
+ * and maintains full Control Plane compatibility.
+ */
+
+const path = require('path');
+
+// Intercept requires to allow running without local node_modules installed
+const Module = require('module');
+const originalRequire = Module.prototype.require;
+Module.prototype.require = function(request) {
+    if (request.includes('src/services/db')) {
+        return { execute: async () => {}, query: async () => [] };
+    }
+    if (request.includes('src/services/policyEngine')) {
+        return {};
+    }
+    if (request.includes('src/services/auditLogger')) {
+        return { log: async () => {} };
+    }
+    if (request === 'fs-extra') {
+        return { pathExists: async () => true, copy: async () => {}, writeJson: async () => {}, stat: async () => ({ size: 1000 }) };
+    }
+    if (request.includes('errors')) {
+        return { ErrorCodes: {}, ErrorTypes: {}, PPOSError: class extends Error {} };
+    }
+    return originalRequire.apply(this, arguments);
+};
+
+const PreflightService = require('./services/PreflightService');
+
+// Instantiate service with lightweight mock dependencies
+const service = new PreflightService({}, {}, {});
+
+function runNormalizationTests() {
+    console.log('=== Starting API Normalization & Integrity Verification ===\n');
+
+    // TEST 1: Missing Tools Environment Failure scenario
+    console.log('[TEST 1] Missing Tools Triggering Strict Environment Invariants');
+    const job1 = { id: 'job_env_fail_1', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const rawResult1 = {
+        ok: true, // Contradictory initial OK
+        analysis_status: 'COMPLETED', // Contradictory status
+        missing_tools: ['pdfimages', 'mutool'],
+        degradedMode: false, // Contradictory flag
+        extractionFidelity: 'REAL_EXTRACTION',
+        summary: {
+            risk_score: 100
+        },
+        findings: [
+            { id: 'f1', severity: 'warning', message: 'Low resolution image' }
+        ]
+    };
+
+    const norm1 = service._normalizeJobPayload(job1, [], rawResult1);
+    console.log('Normalized Outcome Category:', norm1.result.outcome_category);
+    console.log('Normalized Analysis Status:', norm1.result.analysis_status);
+    console.log('Normalized Summary:', JSON.stringify(norm1.result.summary));
+    console.log('Normalized Integrity Contract:', JSON.stringify(norm1.result.analysisIntegrity));
+
+    const passedTest1 = 
+        norm1.result.outcome_category === 'ENVIRONMENT_FAILURE' &&
+        norm1.result.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' &&
+        norm1.result.summary.risk_score === 0 &&
+        norm1.result.summary.environment_errors === 2 &&
+        norm1.result.analysisIntegrity.degradedMode === true &&
+        norm1.result.analysisIntegrity.realExtraction === false &&
+        norm1.result.analysisIntegrity.certifiable === false &&
+        norm1.result.extractionFidelity === 'DEGRADED';
+
+    if (passedTest1) {
+        console.log('--> [PASS] Strict environment invariants enforced correctly.\n');
+    } else {
+        console.error('--> [FAIL] Environment invariant mismatch.\n');
+    }
+
+    // TEST 2: Duplicate Findings Array Optimization scenario
+    console.log('[TEST 2] Duplicate Findings Reduction and Deletion');
+    const job2 = { id: 'job_dup_findings', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const sharedFindings = [{ id: 'issue_1', severity: 'error', message: 'Missing fonts' }];
+    const rawResult2 = {
+        ok: true,
+        status: 'COMPLETED',
+        findings: sharedFindings,
+        issues: sharedFindings,
+        analysis: {
+            issues: sharedFindings
+        },
+        forensics: {
+            findings: sharedFindings
+        },
+        summary: {
+            risk_score: 65
+        }
+    };
+
+    const norm2 = service._normalizeJobPayload(job2, [], rawResult2);
+    
+    const passedTest2 = 
+        norm2.result.findings.length === 1 &&
+        norm2.result.issues === undefined &&
+        norm2.result.analysis?.issues === undefined &&
+        norm2.result.forensics?.findings === undefined &&
+        norm2.result.outcome_category === 'PDF_DOCUMENT_FAILURE' &&
+        norm2.result.summary.issue_count === 1;
+
+    if (passedTest2) {
+        console.log('--> [PASS] Bloated duplicated finding arrays successfully eliminated.\n');
+    } else {
+        console.error('--> [FAIL] Finding deduplication failed.\n');
+    }
+
+    // TEST 3: Successful Validation with Findings
+    console.log('[TEST 3] Successful Validation with Document Findings');
+    const job3 = { id: 'job_success_warn', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const rawResult3 = {
+        ok: true,
+        status: 'COMPLETED',
+        findings: [{ id: 'w1', severity: 'warning', message: 'RGB Color Space used' }],
+        summary: {
+            risk_score: 90
+        }
+    };
+
+    const norm3 = service._normalizeJobPayload(job3, [{ type: 'certified_pdf', name: 'cert.pdf' }], rawResult3);
+    
+    const passedTest3 = 
+        norm3.result.outcome_category === 'SUCCESS_WITH_FINDINGS' &&
+        norm3.result.analysisIntegrity.certifiable === true &&
+        norm3.result.analysisIntegrity.scoreBasis === 'DOCUMENT_FINDINGS' &&
+        norm3.partial === true &&
+        norm3.artifacts.length === 1;
+
+    if (passedTest3) {
+        console.log('--> [PASS] Document success categorization and warnings payload mapped correctly.\n');
+    } else {
+        console.error('--> [FAIL] Document success verification failed.\n');
+    }
+
+    console.log('=== Normalization & Integrity Verification Complete ===');
+}
+
+runNormalizationTests();
