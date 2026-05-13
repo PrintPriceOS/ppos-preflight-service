@@ -96,7 +96,7 @@ function runNormalizationTests() {
         }
     };
 
-    const norm2 = service._normalizeJobPayload(job2, [], rawResult2);
+    const norm2 = service._normalizeJobPayload(job2, [{ type: 'analysis_report', name: 'report.json' }], rawResult2);
     
     const passedTest2 = 
         norm2.result.findings.length === 1 &&
@@ -124,19 +124,60 @@ function runNormalizationTests() {
         }
     };
 
-    const norm3 = service._normalizeJobPayload(job3, [{ type: 'certified_pdf', name: 'cert.pdf' }], rawResult3);
+    const norm3 = service._normalizeJobPayload(job3, [{ type: 'certified_pdf', name: 'cert.pdf' }, { type: 'analysis_report', name: 'report.json' }], rawResult3);
     
     const passedTest3 = 
         norm3.result.outcome_category === 'SUCCESS_WITH_FINDINGS' &&
         norm3.result.analysisIntegrity.certifiable === true &&
         norm3.result.analysisIntegrity.scoreBasis === 'DOCUMENT_FINDINGS' &&
         norm3.partial === true &&
-        norm3.artifacts.length === 1;
+        norm3.artifacts.length === 2;
 
     if (passedTest3) {
         console.log('--> [PASS] Document success categorization and warnings payload mapped correctly.\n');
     } else {
         console.error('--> [FAIL] Document success verification failed.\n');
+    }
+
+    // TEST 4: Certifiable clean doc + missing certified.pdf => PARTIAL_ARTIFACTS
+    console.log('[TEST 4] Certifiable Clean Doc + Missing certified.pdf triggers PARTIAL_ARTIFACTS');
+    const job4 = { id: 'job_clean_missing_cert', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const rawResult4 = { ok: true, status: 'COMPLETED', findings: [] };
+    const norm4 = service._normalizeJobPayload(job4, [{ type: 'analysis_report', name: 'report.json' }], rawResult4);
+    
+    if (norm4.result.analysis_status === 'PARTIAL_ARTIFACTS' && norm4.result.outcome_category === 'ARTIFACT_INTEGRITY_FAILURE') {
+        console.log('--> [PASS] Missing certified.pdf on a certifiable document correctly causes PARTIAL_ARTIFACTS.\n');
+    } else {
+        console.error('--> [FAIL] Clean document missing certified.pdf failed check.\n');
+    }
+
+    // TEST 5: Non-certifiable doc + missing certified.pdf + has report => COMPLETED_WITH_FINDINGS
+    console.log('[TEST 5] Non-certifiable Doc + Missing certified.pdf + Has Report triggers COMPLETED_WITH_FINDINGS');
+    const job5 = { id: 'job_non_cert', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const rawResult5 = {
+        ok: false,
+        status: 'COMPLETED',
+        certifiable: false,
+        findings: [{ id: 'e1', severity: 'error', message: 'Low resolution elements' }]
+    };
+    const norm5 = service._normalizeJobPayload(job5, [{ type: 'analysis_report', name: 'report.json' }], rawResult5);
+    
+    if (norm5.result.analysis_status === 'COMPLETED_WITH_FINDINGS' && norm5.result.outcome_category === 'PDF_DOCUMENT_FAILURE' && norm5.result.artifactIntegrity.ready === true) {
+        console.log('--> [PASS] Missing certified.pdf on non-certifiable document is safely permitted without artifact error.\n');
+    } else {
+        console.error('--> [FAIL] Non-certifiable document check failed.\n');
+    }
+
+    // TEST 6: Missing report.json => PARTIAL_ARTIFACTS
+    console.log('[TEST 6] Missing report.json triggers PARTIAL_ARTIFACTS regardless of document outcome');
+    const job6 = { id: 'job_missing_report', status: 'COMPLETED', job_type: 'ANALYZE' };
+    const rawResult6 = { ok: true, status: 'COMPLETED', findings: [] };
+    const norm6 = service._normalizeJobPayload(job6, [{ type: 'certified_pdf', name: 'cert.pdf' }], rawResult6);
+    
+    if (norm6.result.analysis_status === 'PARTIAL_ARTIFACTS' && norm6.result.outcome_category === 'ARTIFACT_INTEGRITY_FAILURE') {
+        console.log('--> [PASS] Mandatory analysis_report presence checked correctly.\n');
+    } else {
+        console.error('--> [FAIL] Missing report.json verification failed.\n');
     }
 
     console.log('=== Normalization & Integrity Verification Complete ===');

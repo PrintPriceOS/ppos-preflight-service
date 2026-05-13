@@ -623,7 +623,19 @@ class PreflightService {
             safeResult?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
             safeResult?.analysis_type === 'DEGRADED';
 
-        if (job.status === 'COMPLETED' && !primaryArtifact && !isEnvFailPolled) {
+        const rawFindingsPolled = Array.isArray(safeResult.findings) && safeResult.findings.length > 0 ? safeResult.findings :
+            Array.isArray(safeResult.issues) && safeResult.issues.length > 0 ? safeResult.issues :
+                Array.isArray(safeResult.analysis?.findings) && safeResult.analysis.findings.length > 0 ? safeResult.analysis.findings :
+                Array.isArray(safeResult.analysis?.issues) && safeResult.analysis.issues.length > 0 ? safeResult.analysis.issues :
+                    Array.isArray(safeResult.forensics?.findings) && safeResult.forensics.findings.length > 0 ? safeResult.forensics.findings :
+                        [];
+        const hasBlockingFindingsPolled = rawFindingsPolled.some(f => ['critical', 'error'].includes(String(f?.severity || '').toLowerCase()));
+        const isExplicitlyCertifiablePolled = safeResult.certifiable === true || safeResult.analysisIntegrity?.certifiable === true || safeResult.analysis?.certifiable === true;
+        const isInputCertifiablePolled = isExplicitlyCertifiablePolled || (safeResult.certifiable === undefined && safeResult.analysisIntegrity?.certifiable === undefined && !hasBlockingFindingsPolled);
+        const expectsCertifiedPolled = !isEnvFailPolled && isInputCertifiablePolled === true && !hasBlockingFindingsPolled && !isAutofix;
+
+        const isPrimaryRequired = isAutofix ? true : expectsCertifiedPolled;
+        if (job.status === 'COMPLETED' && !primaryArtifact && !isEnvFailPolled && isPrimaryRequired) {
             console.error(`[PREFLIGHT][INTEGRITY] Critical artifact missing for ${job.job_type} job ${jobId}`);
             if (!safeResult.error && !job.error) {
                 safeResult.error = isAutofix ? 'NO_OUTPUT_GENERATED' : 'CERTIFIED_ARTIFACT_MISSING';
@@ -791,21 +803,17 @@ class PreflightService {
             ...extractionErrors.filter(e => !isToolchainText(e) && isRuntimeInfraText(e)).map(errorText)
         ]);
 
-        const artifactErrors = unique([
-            ...asArray(res.artifactErrors),
-            ...rawErrorCandidates.filter(isArtifactText).map(errorText)
-        ]);
-
-        const explicitMissingArtifacts = unique([
-            ...asArray(res.missingArtifacts),
-            ...asArray(res.artifactIntegrity?.missingArtifacts)
-        ]);
+        const isToolchainFailure = hasMissingTools || toolchainErrors.length > 0;
+        const isRuntimeInfraFailure = runtimeInfraErrors.length > 0 || rawErrorCandidates.includes('FAILED_RUNTIME_ENVIRONMENT');
+        const isEnvFailure = isToolchainFailure || isRuntimeInfraFailure;
+        const runtimeErrors = unique([...toolchainErrors, ...runtimeInfraErrors]);
 
         const hasReportArtifact = artifactList.some(a => a.type === 'analysis_report');
         const hasCertifiedArtifact = artifactList.some(a => a.type === 'certified_pdf');
 
         const rawFindings = Array.isArray(res.findings) && res.findings.length > 0 ? res.findings :
             Array.isArray(res.issues) && res.issues.length > 0 ? res.issues :
+                Array.isArray(res.analysis?.findings) && res.analysis.findings.length > 0 ? res.analysis.findings :
                 Array.isArray(res.analysis?.issues) && res.analysis.issues.length > 0 ? res.analysis.issues :
                     Array.isArray(res.forensics?.findings) && res.forensics.findings.length > 0 ? res.forensics.findings :
                         [];
@@ -817,32 +825,59 @@ class PreflightService {
             !/missing binary|missing tool|toolchain/i.test(String(f.message || ''))
         );
 
+        // Task 1: Compute hasBlockingFindings, certifiable, and requiresCertifiedArtifact exactly as specified
         const hasBlockingFindings = documentFindings.some(f => ['critical', 'error'].includes(String(f?.severity || '').toLowerCase()));
-        const wouldBeDocumentCertifiable = !hasBlockingFindings;
+
+        const isJobAutofix = res.type === 'AUTOFIX' || job?.job_type === 'AUTOFIX';
+        const isExplicitlyCertifiable = res.certifiable === true || res.analysisIntegrity?.certifiable === true || res.analysis?.certifiable === true;
+        const isInputCertifiable = isExplicitlyCertifiable || (res.certifiable === undefined && res.analysisIntegrity?.certifiable === undefined && !hasBlockingFindings);
+
+        const requiresCertifiedArtifact = !isEnvFailure && isInputCertifiable === true && !hasBlockingFindings && !isJobAutofix;
+
+        let artifactErrors = unique([
+            ...asArray(res.artifactErrors),
+            ...rawErrorCandidates.filter(isArtifactText).map(errorText)
+        ]);
+
+        // Task 2: Only add CERTIFIED_ARTIFACT_MISSING when requiresCertifiedArtifact is true and certified artifact is absent.
+        if (!requiresCertifiedArtifact) {
+            artifactErrors = artifactErrors.filter(e => e !== 'CERTIFIED_ARTIFACT_MISSING');
+            if (res.error === 'CERTIFIED_ARTIFACT_MISSING') {
+                delete res.error;
+            }
+        }
+
+        let explicitMissingArtifacts = unique([
+            ...asArray(res.missingArtifacts),
+            ...asArray(res.artifactIntegrity?.missingArtifacts)
+        ]);
+
+        if (!requiresCertifiedArtifact) {
+            explicitMissingArtifacts = explicitMissingArtifacts.filter(a => a !== 'certified_pdf');
+        }
 
         const inferredMissingArtifacts = [];
-        if (!hasReportArtifact && (res.artifacts || artifactList.length > 0 || res.artifactIntegrity)) {
+        const rawAnalysisStatus = res.analysis_status ?? res.status ?? job?.status;
+        const isAnalysisCompleted = job?.status === 'COMPLETED' || /COMPLETED|SUCCESS|PASS/i.test(rawAnalysisStatus) || res.artifacts || artifactList.length > 0 || res.artifactIntegrity;
+
+        // Task 3: Always require analysis_report after completed analysis
+        if (!hasReportArtifact && isAnalysisCompleted && !isJobAutofix) {
             inferredMissingArtifacts.push('analysis_report');
         }
-        if (wouldBeDocumentCertifiable && res.certifiable !== false && res.artifactIntegrity?.requiresCertified !== false && res.type !== 'AUTOFIX' && job?.job_type !== 'AUTOFIX') {
-            if (!hasCertifiedArtifact && (res.artifacts || artifactList.length > 0 || res.artifactIntegrity)) {
-                inferredMissingArtifacts.push('certified_pdf');
+
+        if (requiresCertifiedArtifact && !hasCertifiedArtifact && isAnalysisCompleted) {
+            inferredMissingArtifacts.push('certified_pdf');
+            if (!artifactErrors.includes('CERTIFIED_ARTIFACT_MISSING')) {
+                artifactErrors.push('CERTIFIED_ARTIFACT_MISSING');
             }
         }
 
         const missingArtifacts = unique([...explicitMissingArtifacts, ...inferredMissingArtifacts]);
         const hasArtifactFailure = missingArtifacts.length > 0 || artifactErrors.length > 0;
 
-        const isToolchainFailure = hasMissingTools || toolchainErrors.length > 0;
-        const isRuntimeInfraFailure = runtimeInfraErrors.length > 0 || rawErrorCandidates.includes('FAILED_RUNTIME_ENVIRONMENT');
-        const isEnvFailure = isToolchainFailure || isRuntimeInfraFailure;
-
-        const runtimeErrors = unique([...toolchainErrors, ...runtimeInfraErrors]);
-
         // Enforce invariants and log warnings if raw payload was contradictory.
         const rawDegradedMode = res.analysisIntegrity?.degradedMode ?? res.degradedMode;
         const rawExtractionFidelity = res.analysisIntegrity?.extractionFidelity ?? res.extractionFidelity ?? res.extraction_fidelity;
-        const rawAnalysisStatus = res.analysis_status ?? res.status ?? job?.status;
 
         if (isEnvFailure) {
             if (rawDegradedMode === false || rawExtractionFidelity === 'REAL_EXTRACTION' || rawAnalysisStatus === 'COMPLETED' || rawAnalysisStatus === 'PASS') {
@@ -880,8 +915,9 @@ class PreflightService {
         // Runtime/toolchain failures degrade extraction. Artifact failures do not: they mean extraction ran but outputs are incomplete.
         const extractionFidelity = isEnvFailure ? 'DEGRADED' : (rawExtractionFidelity || 'REAL_EXTRACTION');
         const scoreBasis = isEnvFailure ? 'ENVIRONMENT_FAILURE' : (documentFindings.length > 0 ? 'DOCUMENT_FINDINGS' : 'CLEAN');
-        const certifiable = !isEnvFailure && !hasArtifactFailure && !hasBlockingFindings;
+        const certifiable = !isEnvFailure && !hasArtifactFailure && !hasBlockingFindings && isInputCertifiable;
 
+        // Task 4: Set certificationBlockedReason accurately
         const certificationBlockedReason = isEnvFailure
             ? `Runtime environment validation failed. ${missingTools.length ? `Missing required tools: ${missingTools.join(', ')}` : 'Worker/engine runtime failure.'}`
             : hasArtifactFailure
@@ -930,13 +966,16 @@ class PreflightService {
             artifactIntegrity
         };
 
+        // Task 4 & 5: Ensure analysis_status uses COMPLETED_WITH_FINDINGS when report present but non-certifiable
         const analysisStatus = isEnvFailure
             ? 'FAILED_RUNTIME_ENVIRONMENT'
             : hasArtifactFailure
                 ? 'PARTIAL_ARTIFACTS'
-                : documentFindings.length > 0
+                : hasBlockingFindings
                     ? 'COMPLETED_WITH_FINDINGS'
-                    : 'COMPLETED';
+                    : documentFindings.length > 0
+                        ? 'COMPLETED_WITH_FINDINGS'
+                        : 'COMPLETED';
 
         const normalizedResult = {
             ...res,
@@ -972,11 +1011,15 @@ class PreflightService {
         }
 
         const finalJobStatus = isEnvFailure ? 'FAILED' : (job?.status || 'COMPLETED');
-        const finalError = isEnvFailure
+        let finalError = isEnvFailure
             ? (runtimeErrors[0] || 'ENGINE_ENVIRONMENT_FAILURE')
             : hasArtifactFailure
                 ? (artifactErrors[0] || missingArtifacts[0] || 'ARTIFACT_INTEGRITY_FAILURE')
                 : (normalizedResult.error || job?.error || null);
+
+        if (!requiresCertifiedArtifact && finalError === 'CERTIFIED_ARTIFACT_MISSING') {
+            finalError = null;
+        }
 
         const partial = !isEnvFailure && (hasArtifactFailure || (documentFindings.length > 0 && !hasBlockingFindings));
         const analysis_warnings = partial ? documentFindings : [];
