@@ -166,7 +166,33 @@ async function preflightRoutes(fastify, options) {
                 return reply.status(500).send({ error: 'AUTOFIX_EXECUTION_FAILED', message: result.error });
             } else {
                 // Async enqueue via JSON body
-                const { policy, options = {} } = request.body || {};
+                const body = request.body || {};
+                const policy = body.policy || body.policyId;
+                
+                const fixes = Array.isArray(body.fixes) ? body.fixes : (typeof body.fixes === 'string' ? [body.fixes] : undefined);
+                const requested_fixes = Array.isArray(body.requested_fixes) ? body.requested_fixes : (typeof body.requested_fixes === 'string' ? [body.requested_fixes] : fixes);
+
+                // Validate strategies are strings and log unsupported downstream
+                if (fixes) {
+                    fixes.forEach(strategy => {
+                        if (typeof strategy !== 'string') {
+                            console.warn(`[SERVICE][FIX-ACTION][VALIDATION] Non-string repair strategy received:`, strategy);
+                        }
+                    });
+                }
+
+                const options = {
+                    ...body,
+                    ...(body.options || {}),
+                    ...(fixes ? { fixes } : {}),
+                    ...(requested_fixes ? { requested_fixes } : {}),
+                    ...(body.forceBleed !== undefined ? { forceBleed: body.forceBleed } : {}),
+                    ...(body.targetProfile ? { targetProfile: body.targetProfile } : {})
+                };
+                delete options.policy;
+                delete options.policyId;
+                delete options.options;
+
                 const result = await service.autofix(
                     targetId,
                     policy,

@@ -382,8 +382,20 @@ class PreflightService {
             console.warn(`[SERVICE][AUTOFIX][CHECK-WARN] Could not check source job integrity: ${err.message}`);
         }
 
+        const fixesArray = Array.isArray(options.fixes) ? options.fixes : (options.fixes ? [options.fixes] : []);
+        const requestedFixesArray = Array.isArray(options.requested_fixes) ? options.requested_fixes : fixesArray;
+        const forceBleedFlag = options.forceBleed ?? false;
+        const targetProfileStr = options.targetProfile ?? 'FOGRA51';
+
+        console.log(`[SERVICE][FIX-ACTION][REQUEST] Received fix action request. SourceJobId: ${assetId}, FixJobId: ${jobId}, RequestedFixes: ${JSON.stringify(requestedFixesArray)}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}`);
+
+        const hasExplicitFixes = fixesArray.length > 0;
+        if (!options.type && hasExplicitFixes) {
+            options.type = 'composite';
+        }
+
         // Derive fix plan from source job issues when caller doesn't specify a type
-        if (!options.type && !options.repairStrategy && !options.forceBleed) {
+        if (!options.type && !options.repairStrategy && !options.forceBleed && !hasExplicitFixes) {
             try {
                 const [sourceJob] = await db.query(
                     "SELECT result FROM jobs WHERE id = ? AND tenant_id = ?",
@@ -429,7 +441,14 @@ class PreflightService {
                 'AUTOFIX',
                 'QUEUED',
                 idempotencyKey || null,
-                JSON.stringify({ sourceJobId: assetId, targetJobId: jobId })
+                JSON.stringify({ 
+                    sourceJobId: assetId, 
+                    targetJobId: jobId,
+                    requested_fixes: requestedFixesArray,
+                    fixes: fixesArray,
+                    forceBleed: forceBleedFlag,
+                    targetProfile: targetProfileStr
+                })
             ],
             { tenantId, requestId: safeRequestId }
         );
@@ -457,6 +476,10 @@ class PreflightService {
                     targetJobId: jobId,
                     ok: fixResult.ok,
                     repairs: fixResult.repairs || [],
+                    fixes: fixesArray,
+                    requested_fixes: requestedFixesArray,
+                    forceBleed: forceBleedFlag,
+                    targetProfile: targetProfileStr,
                     autofix_attempted: true
                 };
 
@@ -466,15 +489,22 @@ class PreflightService {
                     { tenantId, requestId: safeRequestId }
                 );
 
-                return {
+                const syncResponse = {
                     id: jobId,
                     jobId,
                     sourceJobId: assetId,
                     targetJobId: jobId,
+                    type: 'AUTOFIX',
                     ok: fixResult.ok,
                     status: fixResult.ok ? 'COMPLETED' : 'FAILED',
-                    repairs: fixResult.repairs || []
+                    repairs: fixResult.repairs || [],
+                    fixes: fixesArray,
+                    requested_fixes: requestedFixesArray,
+                    forceBleed: forceBleedFlag,
+                    targetProfile: targetProfileStr
                 };
+                console.log(`[SERVICE][FIX-ACTION][RESPONSE] Returning immediate inline response. SourceJobId: ${assetId}, FixJobId: ${jobId}, RepairsCount: ${syncResponse.repairs.length}, SkippedCount: 0, FailedCount: 0`);
+                return syncResponse;
             } catch (err) {
                 console.error(`[SERVICE][AUTOFIX][SYNC-ERROR] ${err.message}`);
                 await db.execute("UPDATE jobs SET status = 'FAILED', error = ? WHERE id = ?",
@@ -487,6 +517,12 @@ class PreflightService {
         const resolvedPolicyProfile = effectivePolicy.id || policy?.id || policy?.profileId || 'default_autofix_profile';
 
         const jobEnvelope = {
+            type: 'AUTOFIX',
+            sourceJobId: assetId,
+            requested_fixes: requestedFixesArray,
+            fixes: fixesArray,
+            forceBleed: forceBleedFlag,
+            targetProfile: targetProfileStr,
             jobId,
             tenantId,
             requestedBy: auth?.userId || 'SYSTEM',
@@ -508,6 +544,7 @@ class PreflightService {
             contractMode: 'v2_emitted'
         };
 
+        console.log(`[SERVICE][FIX-ACTION][QUEUE-PAYLOAD] Enqueueing worker payload. SourceJobId: ${assetId}, FixJobId: ${jobId}, QueuedFixesCount: ${fixesArray.length}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}`);
         console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${resolvedPolicyProfile})`);
 
         const enqueueResult = await this.worker.enqueue('AUTOFIX', jobEnvelope);
@@ -517,10 +554,16 @@ class PreflightService {
             id: jobId,
             jobId: jobId,
             sourceJobId: assetId,
-            targetJobId: jobId
+            targetJobId: jobId,
+            type: 'AUTOFIX',
+            requested_fixes: requestedFixesArray,
+            fixes: fixesArray,
+            forceBleed: forceBleedFlag,
+            targetProfile: targetProfileStr
         };
 
         console.log(`[SERVICE][AUTOFIX][RESPONSE-CONTRACT] Generated for job: ${jobId} | Source: ${assetId}`);
+        console.log(`[SERVICE][FIX-ACTION][RESPONSE] Returning immediate async response. SourceJobId: ${assetId}, FixJobId: ${jobId}, QueuedFixesCount: ${fixesArray.length}, RepairsCount: 0, SkippedCount: 0, FailedCount: 0`);
         return finalResponse;
     }
 
@@ -668,6 +711,14 @@ class PreflightService {
             } catch (err) {
                 console.error(`[SERVICE][AUTOFIX][VALIDATION-NON-FATAL] Effectiveness check skipped for ${jobId}: ${err.message}`);
             }
+        }
+
+        if (isAutofix) {
+            const requestedFixesList = safeResult.requested_fixes || safeResult.fixes || [];
+            const repairsList = safeResult.repairs || [];
+            const skippedList = safeResult.skipped_fixes || [];
+            const failedList = safeResult.failed_fixes || [];
+            console.log(`[SERVICE][JOB-STATUS][AUTOFIX-RESULT] Autofix result polled. SourceJobId: ${safeResult.sourceJobId || 'unknown'}, FixJobId: ${jobId}, RequestedFixes: ${JSON.stringify(requestedFixesList)}, ForceBleed: ${!!safeResult.forceBleed}, TargetProfile: ${safeResult.targetProfile || 'FOGRA51'}, RepairsCount: ${repairsList.length}, Repairs: ${JSON.stringify(repairsList)}, SkippedCount: ${skippedList.length}, Skipped: ${JSON.stringify(skippedList)}, FailedCount: ${failedList.length}, Failed: ${JSON.stringify(failedList)}`);
         }
 
         return this._normalizeJobPayload(job, artifacts, safeResult);
@@ -977,9 +1028,19 @@ class PreflightService {
                         ? 'COMPLETED_WITH_FINDINGS'
                         : 'COMPLETED';
 
+        let consensusStatus = res.status || 'PASS';
+        if (isEnvFailure) {
+            consensusStatus = 'FAILED_RUNTIME_ENVIRONMENT';
+        } else if (hasBlockingFindings) {
+            consensusStatus = (consensusStatus === 'FAIL_PREPRESS' || res.status === 'FAIL_PREPRESS') ? 'FAIL_PREPRESS' : 'FAIL';
+        } else if (documentFindings.some(f => ['warning', 'info'].includes(String(f?.severity || '').toLowerCase()))) {
+            if (consensusStatus === 'PASS') consensusStatus = 'PASS_WITH_WARNINGS';
+        }
+
         const normalizedResult = {
             ...res,
-            ok: !isEnvFailure && !hasArtifactFailure && (res.ok ?? (!hasBlockingFindings)),
+            status: consensusStatus,
+            ok: !isEnvFailure && !hasArtifactFailure && !hasBlockingFindings && (res.ok !== false),
             analysis_type: isEnvFailure ? 'DEGRADED' : (res.analysis_type || job?.job_type || 'ANALYZE'),
             analysis_status: analysisStatus,
             outcome_category: outcomeCategory,
@@ -1024,6 +1085,20 @@ class PreflightService {
         const partial = !isEnvFailure && (hasArtifactFailure || (documentFindings.length > 0 && !hasBlockingFindings));
         const analysis_warnings = partial ? documentFindings : [];
 
+        const isAutofixJob = job?.job_type === 'AUTOFIX';
+        const autofixRootLifts = {
+            ...(res.sourceJobId ? { sourceJobId: res.sourceJobId } : {}),
+            ...(res.repairs ? { repairs: res.repairs } : {}),
+            ...(res.fixes ? { fixes: res.fixes } : {}),
+            ...(res.requested_fixes || res.fixes ? { requested_fixes: res.requested_fixes || res.fixes } : {}),
+            ...(res.skipped_fixes ? { skipped_fixes: res.skipped_fixes } : {}),
+            ...(res.failed_fixes ? { failed_fixes: res.failed_fixes } : {}),
+            ...(res.warnings ? { warnings: res.warnings } : {}),
+            ...(res.degraded_reasons ? { degraded_reasons: res.degraded_reasons } : {}),
+            ...(res.forceBleed !== undefined ? { forceBleed: res.forceBleed } : {}),
+            ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
+        };
+
         return {
             id: canonicalId,
             jobId: canonicalId,
@@ -1041,7 +1116,8 @@ class PreflightService {
             partial,
             analysis_warnings,
             createdAt: job?.created_at || new Date().toISOString(),
-            artifacts: artifactList
+            ...autofixRootLifts,
+            artifacts: isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList
         };
     }
 }
