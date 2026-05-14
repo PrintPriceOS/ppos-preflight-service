@@ -652,6 +652,130 @@ class PreflightService {
             previews: [{ page: 1, url: `/api/preflight/preview/${jobId}/1` }]
         };
     }
+
+    /**
+     * Lists jobs with Service persistence/source of truth, pagination, and tenant isolation.
+     */
+    async listJobs(context, options = {}) {
+        const safeContext = context || {};
+        const { auth } = safeContext;
+        const limit = options.limit !== undefined ? parseInt(options.limit, 10) : 50;
+        const offset = options.offset !== undefined ? parseInt(options.offset, 10) : 0;
+        const statusParam = options.status || '';
+        const typeParam = options.type || '';
+        const requestedTenantId = options.tenantId || '';
+
+        console.log('[SERVICE][JOBS][LIST-REQUEST] Listing jobs requested.', { limit, offset, status: statusParam, type: typeParam, tenantId: requestedTenantId });
+
+        if (!auth || !auth.tenantId) {
+            const errMsg = 'Tenant identification is mandatory for listing jobs.';
+            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', errMsg);
+            throw new Error(errMsg);
+        }
+
+        try {
+            const isAdmin = ['admin', 'super_admin', 'superadmin', 'system_admin', 'owner', 'legacy_admin'].includes(String(auth.role || '').toLowerCase()) || 
+                            (auth.scopes && auth.scopes.includes('*'));
+
+            const conditions = [];
+            const params = [];
+
+            let targetTenantId = requestedTenantId;
+            if (targetTenantId) {
+                if (!isAdmin && targetTenantId !== auth.tenantId) {
+                    targetTenantId = auth.tenantId;
+                }
+                conditions.push("tenant_id = ?");
+                params.push(targetTenantId);
+            } else {
+                if (!isAdmin) {
+                    conditions.push("tenant_id = ?");
+                    params.push(auth.tenantId);
+                }
+            }
+
+            if (statusParam) {
+                conditions.push("status = ?");
+                params.push(String(statusParam).toUpperCase());
+            }
+
+            if (typeParam) {
+                conditions.push("job_type = ?");
+                params.push(String(typeParam).toUpperCase());
+            }
+
+            const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+            // 1. Total count query
+            const countSql = `SELECT COUNT(*) as total FROM jobs ${whereClause}`;
+            const countRows = await db.query(countSql, params);
+            const total = countRows[0]?.total ? parseInt(countRows[0].total, 10) : 0;
+
+            // 2. Fetch jobs query
+            const fetchSql = `SELECT id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, input_bytes, output_bytes, result, error, created_at, updated_at FROM jobs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+            const fetchParams = [...params, limit, offset];
+            const rows = await db.query(fetchSql, fetchParams);
+
+            // 3. Process each job using Service source of truth
+            const jobs = [];
+            for (const row of rows) {
+                const canonicalId = row.id;
+                let resObj = {};
+                if (typeof row.result === 'string') {
+                    try { resObj = JSON.parse(row.result); } catch (e) {}
+                } else if (row.result && typeof row.result === 'object') {
+                    resObj = row.result;
+                }
+
+                // Retrieve artifacts if available
+                const artifacts = await this.getJobArtifacts(canonicalId, row.tenant_id);
+
+                // Run baseline normalization
+                const normalized = this._normalizeJobPayload(row, artifacts, resObj);
+
+                const isAutofix = row.job_type === 'AUTOFIX';
+                const filename = resObj.meta?.filename || resObj.document?.filename || resObj.filename || 'document.pdf';
+                const size = resObj.meta?.size !== undefined ? resObj.meta.size : (resObj.document?.size !== undefined ? resObj.document.size : (row.input_bytes || 0));
+
+                const jobEnvelope = {
+                    ...normalized,
+                    jobId: canonicalId,
+                    id: canonicalId,
+                    sourceJobId: resObj.sourceJobId || null,
+                    type: row.job_type || normalized.type,
+                    status: normalized.status || row.status,
+                    progress: row.progress !== undefined && row.progress !== null ? row.progress : (normalized.status === 'COMPLETED' ? 100 : 0),
+                    tenantId: row.tenant_id,
+                    policy: resObj.policy || resObj.policyProfile || row.deployment_id || 'default',
+                    document: { filename, size },
+                    meta: { filename, size },
+                    createdAt: row.created_at || new Date().toISOString(),
+                    updatedAt: row.updated_at || row.created_at || new Date().toISOString(),
+                    ...(isAutofix ? {
+                        requested_fixes: resObj.requested_fixes || resObj.fixes || [],
+                        fixes: resObj.fixes || resObj.requested_fixes || [],
+                        repairs: resObj.repairs || []
+                    } : {})
+                };
+
+                jobs.push(jobEnvelope);
+            }
+
+            console.log('[SERVICE][JOBS][LIST-RESULT] Listing jobs successful.', { count: jobs.length, total });
+
+            return {
+                ok: true,
+                total,
+                jobs,
+                source_status: "SERVICE_RUNTIME"
+            };
+
+        } catch (err) {
+            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', err.message);
+            throw err;
+        }
+    }
+
     /**
      * Retrieves the status of a job from the database.
      */

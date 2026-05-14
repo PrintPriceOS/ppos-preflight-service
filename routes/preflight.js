@@ -215,6 +215,20 @@ async function preflightRoutes(fastify, options) {
 
 
     /**
+     * GET /api/preflight/jobs
+     * Lists preflight jobs with pagination, filtering, and tenant isolation.
+     */
+    fastify.get('/jobs', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+        try {
+            const result = await service.listJobs(request.context, request.query);
+            return result;
+        } catch (err) {
+            console.error(`[PRELIGHT][ERROR] GET /jobs - ${err.message}`);
+            throw err;
+        }
+    });
+
+    /**
      * GET /api/preflight/jobs/:id
      */
     fastify.get('/jobs/:id', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
