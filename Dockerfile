@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   mupdf-tools \
   libimage-exiftool-perl \
   which \
+  file \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
@@ -59,6 +60,11 @@ ENV NODE_ENV=production
 ENV PPOS_SERVICE_PORT=8001
 ENV GS_COMMAND=gs
 ENV PPOS_TEMP_DIR=/tmp/ppos-preflight
+ENV PPOS_STORAGE_BASE=/tmp/ppos-preflight
+ENV PPOS_ICC_PROFILE_PATH=/app/icc-profiles/PSO_Coated_v3.icc
+ENV PPOS_CMYK_PROFILE_PATH=/app/icc-profiles/PSO_Coated_v3.icc
+ENV PPOS_DEFAULT_RGB_PROFILE_PATH=/usr/share/color/icc/ghostscript/srgb.icc
+ENV PPOS_DEFAULT_CMYK_FALLBACK_PROFILE_PATH=/usr/share/color/icc/ghostscript/default_cmyk.icc
 
 # ------------------------------------------------------------------
 # Build-time verification of industrial probes
@@ -70,12 +76,14 @@ RUN set -eux; \
   command -v gs; \
   command -v qpdf; \
   command -v exiftool; \
+  command -v file; \
   pdfinfo -v || true; \
   pdfimages -v || true; \
   mutool -v || true; \
   gs --version; \
   qpdf --version; \
-  exiftool -ver
+  exiftool -ver; \
+  file --version || true
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
