@@ -351,6 +351,7 @@ class PreflightService {
         const stats = await fs.stat(fileUrl);
 
         // 1b. Check Source Job Analysis Integrity (Block if runtime extraction was invalid)
+        let sourceResultObj = null;
         try {
             const [sourceJobRow] = await db.query(
                 "SELECT status, error, result FROM jobs WHERE id = ? AND tenant_id = ?",
@@ -359,6 +360,7 @@ class PreflightService {
             if (sourceJobRow) {
                 const sourceResult = typeof sourceJobRow.result === 'string'
                     ? JSON.parse(sourceJobRow.result) : sourceJobRow.result || {};
+                sourceResultObj = sourceResult;
 
                 const missingToolsSource = Array.isArray(sourceResult?.missing_tools) ? sourceResult.missing_tools :
                     Array.isArray(sourceResult?.forensics?.missing_tools) ? sourceResult.forensics.missing_tools :
@@ -382,8 +384,68 @@ class PreflightService {
             console.warn(`[SERVICE][AUTOFIX][CHECK-WARN] Could not check source job integrity: ${err.message}`);
         }
 
-        const fixesArray = Array.isArray(options.fixes) ? options.fixes : (options.fixes ? [options.fixes] : []);
-        const requestedFixesArray = Array.isArray(options.requested_fixes) ? options.requested_fixes : fixesArray;
+        // Fallback Derivation Logic for AUTOFIX requested_fixes
+        const reqBody = contextRequest?.body || {};
+        const asFlatArray = (val) => {
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string' && val.trim()) return [val.trim()];
+            return [];
+        };
+
+        let rawRequested = [
+            ...asFlatArray(options.requested_fixes),
+            ...asFlatArray(options.fixes),
+            ...asFlatArray(options.requestedFixes),
+            ...asFlatArray(reqBody.requested_fixes),
+            ...asFlatArray(reqBody.fixes),
+            ...asFlatArray(reqBody.requestedFixes)
+        ].filter(f => typeof f === 'string' && f.trim());
+
+        let derivedFixes = [...rawRequested];
+
+        if (derivedFixes.length === 0) {
+            // Derive requested_fixes from source job findings before calling Engine
+            if (sourceResultObj) {
+                const sFindings = [
+                    ...(Array.isArray(sourceResultObj.findings) ? sourceResultObj.findings : []),
+                    ...(Array.isArray(sourceResultObj.issues) ? sourceResultObj.issues : []),
+                    ...(Array.isArray(sourceResultObj.analysis?.findings) ? sourceResultObj.analysis.findings : []),
+                    ...(Array.isArray(sourceResultObj.analysis?.issues) ? sourceResultObj.analysis.issues : []),
+                    ...(Array.isArray(sourceResultObj.forensics?.findings) ? sourceResultObj.forensics.findings : [])
+                ];
+                sFindings.forEach(f => {
+                    if (f && typeof f === 'object') {
+                        if (typeof f.repairStrategy === 'string' && f.repairStrategy.trim()) derivedFixes.push(f.repairStrategy.trim());
+                        if (typeof f.fix_method === 'string' && f.fix_method.trim()) derivedFixes.push(f.fix_method.trim());
+                        if (typeof f.recommended_fix === 'string' && f.recommended_fix.trim()) derivedFixes.push(f.recommended_fix.trim());
+                    }
+                });
+            }
+
+            if (derivedFixes.length === 0) {
+                console.log('[SERVICE][FIX-ACTION][NO_REQUESTED_FIXES] No requested fixes provided by client and none could be derived from source job findings.');
+            }
+        }
+
+        const orderMap = {
+            'REBUILD_TRIMBOX': 1,
+            'APPLY_BLEED': 2,
+            'CONVERT_CMYK': 3,
+            'INJECT_OUTPUT_INTENT': 4
+        };
+
+        derivedFixes = [...new Set(derivedFixes)];
+        derivedFixes.sort((a, b) => {
+            const orderA = orderMap[a] ?? 999;
+            const orderB = orderMap[b] ?? 999;
+            return orderA - orderB;
+        });
+
+        const fixesArray = derivedFixes;
+        const requestedFixesArray = derivedFixes;
+        options.fixes = fixesArray;
+        options.requested_fixes = requestedFixesArray;
+
         const forceBleedFlag = options.forceBleed ?? false;
         const targetProfileStr = options.targetProfile ?? 'FOGRA51';
 
@@ -397,12 +459,7 @@ class PreflightService {
         // Derive fix plan from source job issues when caller doesn't specify a type
         if (!options.type && !options.repairStrategy && !options.forceBleed && !hasExplicitFixes) {
             try {
-                const [sourceJob] = await db.query(
-                    "SELECT result FROM jobs WHERE id = ? AND tenant_id = ?",
-                    [assetId, tenantId]
-                );
-                const sourceResult = typeof sourceJob?.result === 'string'
-                    ? JSON.parse(sourceJob.result) : sourceJob?.result || {};
+                const sourceResult = sourceResultObj || {};
                 const sourceIssues = sourceResult.findings || sourceResult.issues || [];
                 const bleedIssue = sourceIssues.find(i =>
                     i.fix_method === 'APPLY_BLEED' || i.repairStrategy === 'APPLY_BLEED'
