@@ -659,17 +659,28 @@ class PreflightService {
     async listJobs(context, options = {}) {
         const safeContext = context || {};
         const { auth } = safeContext;
-        const limit = options.limit !== undefined ? parseInt(options.limit, 10) : 50;
-        const offset = options.offset !== undefined ? parseInt(options.offset, 10) : 0;
-        const statusParam = options.status || '';
-        const typeParam = options.type || '';
-        const requestedTenantId = options.tenantId || '';
+        
+        let parsedLimit = parseInt(options.limit, 10);
+        if (isNaN(parsedLimit) || parsedLimit < 1) {
+            parsedLimit = 50;
+        } else if (parsedLimit > 100) {
+            parsedLimit = 100;
+        }
 
-        console.log('[SERVICE][JOBS][LIST-REQUEST] Listing jobs requested.', { limit, offset, status: statusParam, type: typeParam, tenantId: requestedTenantId });
+        let parsedOffset = parseInt(options.offset, 10);
+        if (isNaN(parsedOffset) || parsedOffset < 0) {
+            parsedOffset = 0;
+        }
+
+        const statusParam = options.status ? String(options.status).trim() : '';
+        const typeParam = options.type ? String(options.type).trim() : '';
+        const requestedTenantId = options.tenantId ? String(options.tenantId).trim() : '';
+
+        console.log('[SERVICE][JOBS][LIST-REQUEST] Listing jobs requested.', { limit: parsedLimit, offset: parsedOffset, status: statusParam, type: typeParam, tenantId: requestedTenantId });
 
         if (!auth || !auth.tenantId) {
             const errMsg = 'Tenant identification is mandatory for listing jobs.';
-            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', errMsg);
+            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', { code: 'UNAUTHORIZED', message: errMsg });
             throw new Error(errMsg);
         }
 
@@ -711,10 +722,12 @@ class PreflightService {
             const countRows = await db.query(countSql, params);
             const total = countRows[0]?.total ? parseInt(countRows[0].total, 10) : 0;
 
-            // 2. Fetch jobs query
-            const fetchSql = `SELECT id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, input_bytes, output_bytes, result, error, created_at, updated_at FROM jobs ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-            const fetchParams = [...params, limit, offset];
-            const rows = await db.query(fetchSql, fetchParams);
+            // 2. Fetch jobs query (safely inlining sanitized integers to prevent ER_WRONG_ARGUMENTS)
+            const fetchSql = `SELECT id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, input_bytes, output_bytes, result, error, created_at, updated_at FROM jobs ${whereClause} ORDER BY created_at DESC LIMIT ${parsedLimit} OFFSET ${parsedOffset}`;
+            
+            console.log('[SERVICE][JOBS][LIST-SQL] Executing query.', { sql: fetchSql, params });
+            
+            const rows = await db.query(fetchSql, params);
 
             // 3. Process each job using Service source of truth
             const jobs = [];
@@ -771,7 +784,7 @@ class PreflightService {
             };
 
         } catch (err) {
-            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', err.message);
+            console.error('[SERVICE][JOBS][LIST-ERROR] Listing jobs failed.', { code: err.code || 'UNKNOWN_ERROR', message: err.message });
             throw err;
         }
     }
