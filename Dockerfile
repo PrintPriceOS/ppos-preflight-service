@@ -63,6 +63,7 @@ ENV PPOS_TEMP_DIR=/tmp/ppos-preflight
 ENV PPOS_STORAGE_BASE=/tmp/ppos-preflight
 ENV PPOS_ICC_PROFILE_PATH=/app/icc-profiles/PSO_Coated_v3.icc
 ENV PPOS_CMYK_PROFILE_PATH=/app/icc-profiles/PSO_Coated_v3.icc
+ENV ICC_PROFILES_DIR=/app/icc-profiles
 ENV PPOS_DEFAULT_RGB_PROFILE_PATH=/usr/share/color/icc/ghostscript/srgb.icc
 ENV PPOS_DEFAULT_CMYK_FALLBACK_PROFILE_PATH=/usr/share/color/icc/ghostscript/default_cmyk.icc
 
