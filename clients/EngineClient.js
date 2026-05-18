@@ -21,19 +21,29 @@ class EngineClient {
             );
 
             let report = await Promise.race([analysisPromise, timeoutPromise]);
-            console.log('[DEBUG][ENGINE-RAW-RESULT]', JSON.stringify(report, null, 2));
+            if (process.env.DEBUG_ENGINE_RESULT === 'true') {
+                console.log('[DEBUG][ENGINE-RAW-RESULT]', JSON.stringify(report, null, 2));
+            }
             const elapsed = Date.now() - start;
             console.log(`[CLIENT][ENGINE] engine.analyzePdf completed in ${elapsed}ms for ${filePath}`);
 
             // Flatten risk_score for product compatibility
             return {
                 ...report,
-                risk_score: report.summary.risk_score,
-                status: report.ok ? 'PASS' : 'FAIL'
+                risk_score: report?.summary?.risk_score ?? report?.risk_score ?? null,
+                status: report?.status ?? (report?.ok ? 'PASS' : 'FAIL')
             };
         }
         
-        return { status: 'PASS', risk_score: 100, findings: [], issues: [], specs: { pages: 1 } };
+        return {
+            ok: false,
+            status: 'FAILED_RUNTIME_ENVIRONMENT',
+            error: 'ENGINE_NOT_INITIALIZED',
+            message: 'PreflightEngine is not initialized.',
+            findings: [],
+            issues: [],
+            analysis_status: 'FAILED_RUNTIME_ENVIRONMENT'
+        };
     }
 
     async autofix(filePath, fixPlan, options) {

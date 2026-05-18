@@ -11,6 +11,7 @@ const OwnershipValidator = require('../src/auth/ownershipValidator');
 const requireScope = require('../src/middleware/requireScope');
 const IdentityValidator = require('../src/utils/identityValidator');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
+const db = require('../src/services/db');
 
 const engineModule = require('@ppos/preflight-engine');
 const engineInstance = engineModule.createStandardEngine();
@@ -121,7 +122,7 @@ async function preflightRoutes(fastify, options) {
                 if (!data) return reply.status(400).send({ error: 'No file' });
 
                 const buffer = await data.toBuffer();
-                const jobId = `sync_fix_${Date.now()}`;
+                const jobId = `fix_multipart_${Date.now()}`;
 
                 // Initialize isolated storage using normalized context
                 const storageContext = service._normalizeStorageContext(request.context);
@@ -154,15 +155,70 @@ async function preflightRoutes(fastify, options) {
                     issues: rawIssues
                 };
 
+                // PERSIST INITIAL STATE
+                await db.execute(
+                    `INSERT INTO jobs (id, tenant_id, deployment_id, user_id, job_type, status, idempotency_key, result)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        jobId,
+                        auth.tenantId,
+                        'unknown',
+                        auth.userId || 'SYSTEM',
+                        'AUTOFIX',
+                        'PROCESSING',
+                        null,
+                        JSON.stringify({
+                            sourceJobId: 'multipart_upload',
+                            targetJobId: jobId,
+                            requested_fixes: rawIssues ? rawIssues.map(i => i.fix_method) : [],
+                            fixes: [derivedType],
+                            forceBleed: fixPlan.forceBleed,
+                            targetProfile: fixPlan.profile
+                        })
+                    ],
+                    { tenantId: auth.tenantId }
+                );
+
                 // Execute Engine
-                const result = await engineInstance.autofixPdf(filePath, fixPlan);
+                const outputDir = storage.getJobSubfolder(auth.tenantId, jobId, 'output');
+                await fs.ensureDir(outputDir);
+                const result = await engineInstance.autofixPdf(filePath, fixPlan, { outputDir });
+
+                const fixedPath = path.join(outputDir, 'fixed.pdf');
+                if (result.ok && result.fixedPath) {
+                    await fs.copy(result.fixedPath, fixedPath);
+                }
+
+                const resultPayload = {
+                    sourceJobId: 'multipart_upload',
+                    targetJobId: jobId,
+                    ok: result.ok,
+                    repairs: result.repairs || [],
+                    fixes: [derivedType],
+                    requested_fixes: rawIssues ? rawIssues.map(i => i.fix_method) : [],
+                    forceBleed: fixPlan.forceBleed,
+                    targetProfile: fixPlan.profile,
+                    autofix_attempted: true,
+                    outcome_category: result.ok ? 'SUCCESS' : 'ENVIRONMENT_FAILURE',
+                    analysis_status: result.ok ? 'COMPLETED' : 'FAILED',
+                    artifacts: result.ok ? { final_fixed_pdf: 'fixed.pdf' } : {},
+                    primary_artifact_type: 'final_fixed_pdf',
+                    primary_artifact_name: 'fixed.pdf'
+                };
+
+                // UPDATE DATABASE
+                await db.execute(
+                    "UPDATE jobs SET status = ?, result = ? WHERE id = ?",
+                    [result.ok ? 'COMPLETED' : 'FAILED', JSON.stringify(resultPayload), jobId],
+                    { tenantId: auth.tenantId }
+                );
 
                 if (result.ok) {
-                    console.log(`[PRELIGHT][JOBS] Sync fix successful for job: ${jobId}`);
-                    const fileBuffer = await fs.readFile(result.fixedPath);
+                    console.log(`[PRELIGHT][JOBS] Sync multipart fix successful for job: ${jobId}`);
+                    const fileBuffer = await fs.readFile(fixedPath);
                     return reply.type('application/pdf').send(fileBuffer);
                 }
-                console.error(`[PRELIGHT][ERROR] Sync fix failed: ${result.error}`);
+                console.error(`[PRELIGHT][ERROR] Sync multipart fix failed: ${result.error}`);
                 return reply.status(500).send({ error: 'AUTOFIX_EXECUTION_FAILED', message: result.error });
             } else {
                 // Async enqueue via JSON body
@@ -266,12 +322,46 @@ async function preflightRoutes(fastify, options) {
         const { auth } = request.context;
 
         try {
+            // Get all known artifacts for the job
+            const artifacts = await service.getJobArtifacts(jobId, auth.tenantId);
+            let resolvedArtifact = null;
+
+            // 0. Pre-resolve alias if artifactId matches standard aliases
+            if (artifactId === 'final_fixed_pdf') {
+                const targetFileNames = ['fixed.pdf', 'normalized.pdf', 'certified.pdf'];
+                for (const targetName of targetFileNames) {
+                    resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === targetName.toLowerCase());
+                    if (resolvedArtifact) break;
+                }
+            } else if (artifactId === 'certified_pdf') {
+                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === 'certified.pdf');
+            } else if (artifactId === 'analysis_report') {
+                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === 'report.json');
+            }
+
+            // 1. Exact filename match
+            if (!resolvedArtifact) {
+                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === artifactId.toLowerCase());
+            }
+
+            // 2. Artifact manifest id match
+            if (!resolvedArtifact) {
+                resolvedArtifact = artifacts.find(a => a.id === artifactId);
+            }
+
+            // 3. Artifact type match
+            if (!resolvedArtifact) {
+                resolvedArtifact = artifacts.find(a => a.type === artifactId);
+            }
+
+            const targetFileName = resolvedArtifact ? resolvedArtifact.name : artifactId;
+
             // Priority search across standard isolation subfolders
             const subfolders = ['output', 'reports', 'input'];
             let finalPath = null;
 
             for (const sub of subfolders) {
-                const potential = path.join(storage.getJobSubfolder(auth.tenantId, jobId, sub), artifactId);
+                const potential = path.join(storage.getJobSubfolder(auth.tenantId, jobId, sub), targetFileName);
                 if (await fs.pathExists(potential)) {
                     finalPath = potential;
                     break;
@@ -289,8 +379,18 @@ async function preflightRoutes(fastify, options) {
                     message = `Artifact ${artifactId} was not produced because the ${jobStatus.type || 'processing'} job failed. Root cause: ${jobStatus.error || 'Unknown engine failure'}.`;
                 }
 
+                const available = artifacts.map(a => ({
+                    id: a.id,
+                    name: a.name,
+                    type: a.type
+                }));
+
                 return reply.status(404).send({
                     error: 'ARTIFACT_NOT_FOUND',
+                    jobId,
+                    artifactId,
+                    requestedAlias: ['final_fixed_pdf', 'certified_pdf', 'analysis_report'].includes(artifactId) ? artifactId : (resolvedArtifact ? resolvedArtifact.type : null),
+                    availableArtifacts: available,
                     message
                 });
             }
@@ -298,7 +398,7 @@ async function preflightRoutes(fastify, options) {
             // Phase 10: isolation breach verification
             storage.verifyPathIsolation(auth.tenantId, finalPath);
 
-            const ext = path.extname(artifactId).toLowerCase();
+            const ext = path.extname(targetFileName).toLowerCase();
             const mimeTypes = {
                 '.pdf': 'application/pdf',
                 '.json': 'application/json',
@@ -313,7 +413,7 @@ async function preflightRoutes(fastify, options) {
 
             // Enforce attachment for binaries or PDFs to ensure browser safety
             if (contentType === 'application/octet-stream' || ext === '.pdf') {
-                reply.header('Content-Disposition', `attachment; filename="${artifactId}"`);
+                reply.header('Content-Disposition', `attachment; filename="${targetFileName}"`);
             }
 
             return fs.createReadStream(finalPath);

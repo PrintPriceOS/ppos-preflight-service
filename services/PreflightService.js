@@ -15,6 +15,81 @@ const HashUtility = require('../src/utils/hashUtility');
  */
 const policyCatalog = require('./policyCatalog');
 
+function classifyEngineResult(report) {
+    if (!report) return 'FULL_ENVIRONMENT_FAILURE';
+    
+    // Gather findings from all possible locations
+    const findings = [
+        ...(Array.isArray(report.findings) ? report.findings : []),
+        ...(Array.isArray(report.issues) ? report.issues : []),
+        ...(Array.isArray(report.analysis?.findings) ? report.analysis.findings : []),
+        ...(Array.isArray(report.analysis?.issues) ? report.analysis.issues : []),
+        ...(Array.isArray(report.forensics?.findings) ? report.forensics.findings : [])
+    ];
+    
+    const missingToolsCheck = Array.isArray(report?.missing_tools) ? report.missing_tools :
+        Array.isArray(report?.forensics?.missing_tools) ? report.forensics.missing_tools :
+        Array.isArray(report?.analysis?.missing_tools) ? report.analysis.missing_tools :
+        Array.isArray(report?.environment?.missing_tools) ? report.environment.missing_tools :
+        Array.isArray(report?.meta?.missing_tools) ? report.meta.missing_tools :
+        (typeof report?.missing_tools === 'string' ? [report.missing_tools] : []);
+
+    const hasMissingTools = missingToolsCheck.length > 0;
+    
+    const hasCoverage = report.analyzerCoverage || report.analyzer_coverage || report.analysis?.analyzerCoverage;
+    const hasSummary = report.summary || report.analysis?.summary;
+    const hasUsableResult = findings.length > 0 || hasSummary || hasCoverage;
+    
+    const realExtraction = report.analysisIntegrity?.realExtraction ?? report.realExtraction;
+    const degradedMode = report.analysisIntegrity?.degradedMode ?? report.degradedMode;
+    
+    const hardRuntimeError = /ENVIRONMENT|TOOLCHAIN|MISSING_TOOL|ENOENT|spawn/i.test(String(report.error || '')) && !hasUsableResult;
+
+    // 1. FULL_ENVIRONMENT_FAILURE
+    if (
+        report.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
+        report.status === 'FAILED_RUNTIME_ENVIRONMENT' ||
+        (realExtraction === false && !hasUsableResult) ||
+        hardRuntimeError
+    ) {
+        return 'FULL_ENVIRONMENT_FAILURE';
+    }
+    
+    // 2. DEGRADED_ANALYSIS
+    if (
+        hasMissingTools ||
+        degradedMode === true
+    ) {
+        if (hasUsableResult || realExtraction !== false) {
+            return 'DEGRADED_ANALYSIS';
+        }
+    }
+    
+    // 3. PARTIAL_ANALYSIS
+    const partialOrSkippedCoverage = 
+        (report.analyzerCoverage?.partial && report.analyzerCoverage.partial.length > 0) ||
+        (report.analyzerCoverage?.skipped && report.analyzerCoverage.skipped.length > 0) ||
+        (report.analyzer_coverage?.partial && report.analyzer_coverage.partial.length > 0) ||
+        (report.analyzer_coverage?.skipped && report.analyzer_coverage.skipped.length > 0);
+        
+    if (
+        report.analysis_status === 'PARTIAL' ||
+        report.status === 'PARTIAL' ||
+        partialOrSkippedCoverage
+    ) {
+        return 'PARTIAL_ANALYSIS';
+    }
+    
+    // 4. DOCUMENT_FAILURE
+    const hasBlockingFindings = findings.some(f => ['critical', 'error'].includes(String(f?.severity || '').toLowerCase()));
+    if (hasBlockingFindings) {
+        return 'DOCUMENT_FAILURE';
+    }
+    
+    // 5. SUCCESS
+    return 'SUCCESS';
+}
+
 class PreflightService {
     constructor(engineClient, workerClient, storage) {
         this.engine = engineClient;
@@ -156,23 +231,8 @@ class PreflightService {
                 console.log(`[PREFLIGHT][SERVICE][${safeRequestId}] Sync analysis completed in ${elapsed}ms for job: ${jobId}`);
 
                 // Phase 10: Silent Failure Prevention & Runtime Extraction Verification
-                const missingToolsCheck = Array.isArray(report?.missing_tools) ? report.missing_tools :
-                    Array.isArray(report?.forensics?.missing_tools) ? report.forensics.missing_tools :
-                        Array.isArray(report?.analysis?.missing_tools) ? report.analysis.missing_tools :
-                            Array.isArray(report?.environment?.missing_tools) ? report.environment.missing_tools :
-                                Array.isArray(report?.meta?.missing_tools) ? report.meta.missing_tools :
-                                    (typeof report?.missing_tools === 'string' ? [report.missing_tools] : []);
-
-                const extractionErrorsCheck = Array.isArray(report?.analysisIntegrity?.extractionErrors)
-                    ? report.analysisIntegrity.extractionErrors
-                    : Array.isArray(report?.extractionErrors)
-                        ? report.extractionErrors
-                        : [];
-
-                const hasEnvFailure = missingToolsCheck.length > 0 ||
-                    /ENVIRONMENT|TOOLCHAIN|MISSING_TOOL|ENOENT|spawn/i.test(String(report?.error || '')) ||
-                    extractionErrorsCheck.some(e => /ENOENT|spawn|missing tool|missing binary|toolchain/i.test(String(e?.message || e || ''))) ||
-                    report?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT';
+                const engineClass = classifyEngineResult(report);
+                const hasEnvFailure = engineClass === 'FULL_ENVIRONMENT_FAILURE';
 
                 const findings = report.findings || report.issues || [];
                 const hasBlockingFindings = findings.some(f => ['critical', 'error'].includes(String(f?.severity || '').toLowerCase()));
@@ -350,7 +410,7 @@ class PreflightService {
 
         const stats = await fs.stat(fileUrl);
 
-        // 1b. Check Source Job Analysis Integrity (Block if runtime extraction was invalid)
+        // 1b. Check Source Job Analysis Integrity (Block ONLY if full environment failure is classified)
         let sourceResultObj = null;
         try {
             const [sourceJobRow] = await db.query(
@@ -362,17 +422,12 @@ class PreflightService {
                     ? JSON.parse(sourceJobRow.result) : sourceJobRow.result || {};
                 sourceResultObj = sourceResult;
 
-                const missingToolsSource = Array.isArray(sourceResult?.missing_tools) ? sourceResult.missing_tools :
-                    Array.isArray(sourceResult?.forensics?.missing_tools) ? sourceResult.forensics.missing_tools :
-                        Array.isArray(sourceResult?.analysis?.missing_tools) ? sourceResult.analysis.missing_tools :
-                            Array.isArray(sourceResult?.environment?.missing_tools) ? sourceResult.environment.missing_tools :
-                                Array.isArray(sourceResult?.meta?.missing_tools) ? sourceResult.meta.missing_tools :
-                                    (typeof sourceResult?.missing_tools === 'string' ? [sourceResult.missing_tools] : []);
+                const engineClass = classifyEngineResult(sourceResult);
 
-                const hasEnvFailure = missingToolsSource.length > 0 ||
-                    sourceJobRow.error?.includes('ENVIRONMENT') ||
+                const hasEnvFailure = engineClass === 'FULL_ENVIRONMENT_FAILURE' ||
+                    (sourceJobRow.error && /ENVIRONMENT|TOOLCHAIN|MISSING_TOOL|ENOENT|spawn/i.test(sourceJobRow.error)) ||
                     sourceResult?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
-                    sourceResult?.analysis_type === 'DEGRADED';
+                    sourceResult?.status === 'FAILED_RUNTIME_ENVIRONMENT';
 
                 if (hasEnvFailure) {
                     console.warn(`[SERVICE][AUTOFIX][BLOCKED] Autofix blocked for asset ${assetId} due to invalid runtime extraction/environment failure.`);
@@ -847,18 +902,13 @@ class PreflightService {
         safeResult.primary_artifact_name = primary_artifact_name;
 
         // Verify environment failure to avoid overwriting error with generic ARTIFACT_MISSING
-        const missingToolsPolled = Array.isArray(safeResult?.missing_tools) ? safeResult.missing_tools :
-            Array.isArray(safeResult?.forensics?.missing_tools) ? safeResult.forensics.missing_tools :
-                Array.isArray(safeResult?.analysis?.missing_tools) ? safeResult.analysis.missing_tools :
-                    Array.isArray(safeResult?.environment?.missing_tools) ? safeResult.environment.missing_tools :
-                        Array.isArray(safeResult?.meta?.missing_tools) ? safeResult.meta.missing_tools :
-                            (typeof safeResult?.missing_tools === 'string' ? [safeResult.missing_tools] : []);
-
-        const isEnvFailPolled = missingToolsPolled.length > 0 ||
+        const polledEngineClass = classifyEngineResult(safeResult);
+        const isEnvFailPolled =
+            polledEngineClass === 'FULL_ENVIRONMENT_FAILURE' ||
             job.error?.includes('ENVIRONMENT') ||
             safeResult?.error?.includes('ENVIRONMENT') ||
             safeResult?.analysis_status === 'FAILED_RUNTIME_ENVIRONMENT' ||
-            safeResult?.analysis_type === 'DEGRADED';
+            safeResult?.status === 'FAILED_RUNTIME_ENVIRONMENT';
 
         const rawFindingsPolled = Array.isArray(safeResult.findings) && safeResult.findings.length > 0 ? safeResult.findings :
             Array.isArray(safeResult.issues) && safeResult.issues.length > 0 ? safeResult.issues :
@@ -984,8 +1034,12 @@ class PreflightService {
 
         console.log(`[PRELIGHT][POLICIES] Resolving policies for tenant: ${auth?.tenantId || 'unknown'}. Loaded ${policyCatalog.length} policies.`);
 
-        // Return the full production-ready catalog
+        // Return the full production-ready catalog with extensive intelligence metadata
         return {
+            source: 'LOCAL_CATALOG',
+            fallbackMode: false,
+            policyVersion: '1.0.0',
+            loadedAt: new Date().toISOString(),
             policies: policyCatalog
         };
     }
@@ -1037,6 +1091,9 @@ class PreflightService {
             rawErrorCandidates.push('FAILED_RUNTIME_ENVIRONMENT');
         }
 
+        const engineClass = classifyEngineResult(res);
+        const isEnvFailure = engineClass === 'FULL_ENVIRONMENT_FAILURE';
+
         const toolchainErrors = unique([
             ...missingTools.map(tool => `MISSING_TOOL:${tool}`),
             ...extractionErrors.filter(isToolchainText).map(errorText),
@@ -1048,22 +1105,40 @@ class PreflightService {
             ...extractionErrors.filter(e => !isToolchainText(e) && isRuntimeInfraText(e)).map(errorText)
         ]);
 
-        const isToolchainFailure = hasMissingTools || toolchainErrors.length > 0;
-        const isRuntimeInfraFailure = runtimeInfraErrors.length > 0 || rawErrorCandidates.includes('FAILED_RUNTIME_ENVIRONMENT');
-        const isEnvFailure = isToolchainFailure || isRuntimeInfraFailure;
+        const isToolchainFailure = isEnvFailure && hasMissingTools;
+        const isRuntimeInfraFailure = isEnvFailure && !hasMissingTools;
         const runtimeErrors = unique([...toolchainErrors, ...runtimeInfraErrors]);
 
         const hasReportArtifact = artifactList.some(a => a.type === 'analysis_report');
         const hasCertifiedArtifact = artifactList.some(a => a.type === 'certified_pdf');
 
-        const rawFindings = Array.isArray(res.findings) && res.findings.length > 0 ? res.findings :
-            Array.isArray(res.issues) && res.issues.length > 0 ? res.issues :
-                Array.isArray(res.analysis?.findings) && res.analysis.findings.length > 0 ? res.analysis.findings :
-                Array.isArray(res.analysis?.issues) && res.analysis.issues.length > 0 ? res.analysis.issues :
-                    Array.isArray(res.forensics?.findings) && res.forensics.findings.length > 0 ? res.forensics.findings :
-                        [];
+        // Merge findings from all sources
+        const collectedFindings = [
+            ...(Array.isArray(res.findings) ? res.findings : []),
+            ...(Array.isArray(res.issues) ? res.issues : []),
+            ...(Array.isArray(res.analysis?.findings) ? res.analysis.findings : []),
+            ...(Array.isArray(res.analysis?.issues) ? res.analysis.issues : []),
+            ...(Array.isArray(res.forensics?.findings) ? res.forensics.findings : [])
+        ];
 
-        const documentFindings = rawFindings.filter(f =>
+        // Deduplicate findings by id if present, else by code + page + severity + message
+        const seenFindings = new Set();
+        const mergedFindings = [];
+        for (const finding of collectedFindings) {
+            if (!finding || typeof finding !== 'object') continue;
+            let key;
+            if (finding.id) {
+                key = `id:${finding.id}`;
+            } else {
+                key = `key:${finding.code || ''}_${finding.page || ''}_${finding.severity || ''}_${finding.message || ''}`;
+            }
+            if (!seenFindings.has(key)) {
+                seenFindings.add(key);
+                mergedFindings.push(finding);
+            }
+        }
+
+        const documentFindings = mergedFindings.filter(f =>
             !f.isEnvironmentError &&
             f.type !== 'ENVIRONMENT' &&
             !String(f.code || '').includes('TOOL') &&
@@ -1145,6 +1220,10 @@ class PreflightService {
             outcomeCategory = 'ENVIRONMENT_FAILURE';
         } else if (hasArtifactFailure) {
             outcomeCategory = 'ARTIFACT_INTEGRITY_FAILURE';
+        } else if (engineClass === 'DEGRADED_ANALYSIS') {
+            outcomeCategory = 'DEGRADED_ANALYSIS';
+        } else if (engineClass === 'PARTIAL_ANALYSIS') {
+            outcomeCategory = 'PARTIAL_ANALYSIS';
         } else if (hasBlockingFindings) {
             outcomeCategory = 'PDF_DOCUMENT_FAILURE';
         } else if (documentFindings.length > 0) {
@@ -1158,7 +1237,9 @@ class PreflightService {
                 : null;
 
         // Runtime/toolchain failures degrade extraction. Artifact failures do not: they mean extraction ran but outputs are incomplete.
-        const extractionFidelity = isEnvFailure ? 'DEGRADED' : (rawExtractionFidelity || 'REAL_EXTRACTION');
+        const degradedMode = engineClass === 'DEGRADED_ANALYSIS' || hasMissingTools || !!rawDegradedMode;
+        const realExtraction = !isEnvFailure;
+        const extractionFidelity = (isEnvFailure || degradedMode) ? 'DEGRADED' : (rawExtractionFidelity || 'REAL_EXTRACTION');
         const scoreBasis = isEnvFailure ? 'ENVIRONMENT_FAILURE' : (documentFindings.length > 0 ? 'DOCUMENT_FINDINGS' : 'CLEAN');
         const certifiable = !isEnvFailure && !hasArtifactFailure && !hasBlockingFindings && isInputCertifiable;
 
@@ -1200,8 +1281,8 @@ class PreflightService {
         };
 
         const analysisIntegrity = {
-            degradedMode: isEnvFailure,
-            realExtraction: !isEnvFailure,
+            degradedMode,
+            realExtraction,
             certifiable,
             extractionFidelity,
             scoreBasis,
@@ -1211,16 +1292,20 @@ class PreflightService {
             artifactIntegrity
         };
 
-        // Task 4 & 5: Ensure analysis_status uses COMPLETED_WITH_FINDINGS when report present but non-certifiable
+        // Task 4 & 5: Ensure analysis_status uses correct diagnostics
         const analysisStatus = isEnvFailure
             ? 'FAILED_RUNTIME_ENVIRONMENT'
             : hasArtifactFailure
                 ? 'PARTIAL_ARTIFACTS'
-                : hasBlockingFindings
-                    ? 'COMPLETED_WITH_FINDINGS'
-                    : documentFindings.length > 0
-                        ? 'COMPLETED_WITH_FINDINGS'
-                        : 'COMPLETED';
+                : engineClass === 'DEGRADED_ANALYSIS'
+                    ? 'DEGRADED'
+                    : engineClass === 'PARTIAL_ANALYSIS'
+                        ? 'PARTIAL'
+                        : hasBlockingFindings
+                            ? 'COMPLETED_WITH_FINDINGS'
+                            : documentFindings.length > 0
+                                ? 'COMPLETED_WITH_FINDINGS'
+                                : 'COMPLETED';
 
         let consensusStatus = res.status || 'PASS';
         if (isEnvFailure) {
@@ -1253,19 +1338,34 @@ class PreflightService {
             certifiable,
             analysisIntegrity,
             summary,
-            findings: documentFindings
+            findings: documentFindings,
+            issues: documentFindings, // Alias
+            warnings: res.warnings || [],
+            analyzerCoverage: res.analyzerCoverage || res.analyzer_coverage || res.analysis?.analyzerCoverage || null,
+            analyzer_coverage: res.analyzer_coverage || res.analyzerCoverage || res.analysis?.analyzerCoverage || null
         };
 
-        // Explicitly remove redundant repeated finding arrays.
-        delete normalizedResult.issues;
-        if (normalizedResult.analysis) {
-            delete normalizedResult.analysis.issues;
+        // Compatibility: do not delete analysis.issues or forensics.findings unless necessary
+        if (normalizedResult.analysis && !normalizedResult.analysis.issues) {
+            normalizedResult.analysis.issues = documentFindings;
         }
-        if (normalizedResult.forensics) {
-            delete normalizedResult.forensics.findings;
+        if (normalizedResult.forensics && !normalizedResult.forensics.findings) {
+            normalizedResult.forensics.findings = documentFindings;
         }
 
-        const finalJobStatus = isEnvFailure ? 'FAILED' : (job?.status || 'COMPLETED');
+        let finalJobStatus = job?.status || 'COMPLETED';
+        if (isEnvFailure) {
+            finalJobStatus = 'FAILED';
+        } else if (finalJobStatus === 'COMPLETED' || finalJobStatus === 'SUCCESS') {
+            if (hasArtifactFailure) {
+                finalJobStatus = 'PARTIAL_ARTIFACTS';
+            } else if (engineClass === 'DEGRADED_ANALYSIS') {
+                finalJobStatus = 'DEGRADED';
+            } else if (engineClass === 'PARTIAL_ANALYSIS') {
+                finalJobStatus = 'PARTIAL';
+            }
+        }
+
         let finalError = isEnvFailure
             ? (runtimeErrors[0] || 'ENGINE_ENVIRONMENT_FAILURE')
             : hasArtifactFailure
@@ -1276,7 +1376,7 @@ class PreflightService {
             finalError = null;
         }
 
-        const partial = !isEnvFailure && (hasArtifactFailure || (documentFindings.length > 0 && !hasBlockingFindings));
+        const partial = !isEnvFailure && (hasArtifactFailure || (documentFindings.length > 0 && !hasBlockingFindings) || engineClass === 'DEGRADED_ANALYSIS' || engineClass === 'PARTIAL_ANALYSIS');
         const analysis_warnings = partial ? documentFindings : [];
 
         const isAutofixJob = job?.job_type === 'AUTOFIX';
@@ -1299,7 +1399,7 @@ class PreflightService {
             ok: normalizedResult.ok,
             status: finalJobStatus,
             type: job?.job_type || normalizedResult.analysis_type,
-            progress: job?.progress || (finalJobStatus === 'COMPLETED' ? 100 : 0),
+            progress: job?.progress || (['COMPLETED', 'DEGRADED', 'PARTIAL', 'PARTIAL_ARTIFACTS'].includes(finalJobStatus) ? 100 : 0),
             result: normalizedResult,
             error: finalError,
             message: normalizedResult.message || (isEnvFailure
