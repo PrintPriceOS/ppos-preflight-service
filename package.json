@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "dev": "fastify start -l info server.js"
+    "dev": "fastify start -l info server.js",
+    "seed": "node scripts/seed_demo_account.js"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
