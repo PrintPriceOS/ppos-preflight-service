@@ -969,13 +969,34 @@ class PreflightService {
     }
 
 
-    /**
-     * getJobArtifacts
-     * Scans storage and returns a canonical list of artifacts for a job.
-     */
     async getJobArtifacts(jobId, tenantId) {
         const artifacts = [];
         const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+
+        let requiresReview = false;
+        let productionCertified = true;
+        let isAutofix = false;
+        let status = '';
+
+        try {
+            const [jobRows] = await db.query("SELECT * FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
+            const job = jobRows[0];
+            if (job) {
+                isAutofix = job.job_type === 'AUTOFIX';
+                status = job.status;
+                let res = {};
+                if (typeof job.result === 'string') {
+                    try { res = JSON.parse(job.result); } catch(e) {}
+                } else if (job.result && typeof job.result === 'object') {
+                    res = job.result;
+                }
+                
+                productionCertified = res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false;
+                requiresReview = res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || status === "COMPLETED_WITH_REVIEW" || status === "AUTOFIX_PARTIAL" || productionCertified === false;
+            }
+        } catch(e) {
+            console.warn(`[ARTIFACT-DISCOVERY-WARN] Could not fetch job ${jobId} for review status check: ${e.message}`);
+        }
 
         try {
             if (await fs.pathExists(outputDir)) {
@@ -984,25 +1005,46 @@ class PreflightService {
                     const filePath = path.join(outputDir, file);
                     const stats = await fs.stat(filePath);
 
-                    // Categorize artifact based on filename/ext (Canonical Phase 10 Mapping)
-                    let type = 'output_file';
-                    if (file === 'report.json') type = 'analysis_report';
-                    else if (file === 'fixed.pdf' || file === 'normalized.pdf') type = 'final_fixed_pdf';
-                    else if (file === 'fix_audit.json') type = 'fix_audit';
-                    else if (file === 'certified.pdf') type = 'certified_pdf';
-                    else if (file.endsWith('.png')) type = 'page_preview';
+                    const pushArtifact = (type) => {
+                        artifacts.push({
+                            id: Buffer.from(`${jobId}:${type}:${file}`).toString('base64').replace(/=/g, ''),
+                            jobId,
+                            type,
+                            name: file,
+                            path: `/jobs/${jobId}/output/${file}`,
+                            mimeType: this._getMimeByExt(path.extname(file)),
+                            size: stats.size,
+                            createdAt: stats.birthtime,
+                            status: 'READY'
+                        });
+                    };
 
-                    artifacts.push({
-                        id: Buffer.from(`${jobId}:${file}`).toString('base64').replace(/=/g, ''),
-                        jobId,
-                        type,
-                        name: file,
-                        path: `/jobs/${jobId}/output/${file}`,
-                        mimeType: this._getMimeByExt(path.extname(file)),
-                        size: stats.size,
-                        createdAt: stats.birthtime,
-                        status: 'READY'
-                    });
+                    if (file === 'report.json') {
+                        pushArtifact('analysis_report');
+                        pushArtifact('report_json');
+                    } else if (file === 'fix_audit.json') {
+                        pushArtifact('fix_audit');
+                    } else if (file === 'certified.pdf') {
+                        pushArtifact('certified_pdf');
+                    } else if (file === 'fixed.pdf') {
+                        pushArtifact('fixed_pdf');
+                        pushArtifact('final_fixed_pdf');
+                        if (requiresReview || (isAutofix && ['AUTOFIX_PARTIAL', 'COMPLETED_WITH_REVIEW'].includes(status))) {
+                            pushArtifact('review_pdf');
+                        }
+                    } else if (file === 'normalized.pdf') {
+                        pushArtifact('normalized_pdf');
+                        if (!files.includes('fixed.pdf')) {
+                            pushArtifact('final_fixed_pdf');
+                            if (requiresReview || (isAutofix && ['AUTOFIX_PARTIAL', 'COMPLETED_WITH_REVIEW'].includes(status))) {
+                                pushArtifact('review_pdf');
+                            }
+                        }
+                    } else if (file.endsWith('.png')) {
+                        pushArtifact('page_preview');
+                    } else {
+                        pushArtifact('output_file');
+                    }
                 }
             }
         } catch (err) {
@@ -1393,6 +1435,30 @@ class PreflightService {
             ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
         };
 
+        const productionCertified = res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false;
+        const requiresReview = res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL";
+
+        let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
+        
+        if (isAutofixJob && returnedArtifacts && typeof returnedArtifacts === 'object' && !Array.isArray(returnedArtifacts)) {
+             const hasFixed = returnedArtifacts.fixed_pdf || returnedArtifacts.final_fixed_pdf || artifactList.some(a => a.name === 'fixed.pdf');
+             const hasNormalized = returnedArtifacts.normalized_pdf || artifactList.some(a => a.name === 'normalized.pdf');
+             
+             if (requiresReview && hasFixed) {
+                 returnedArtifacts.review_pdf = returnedArtifacts.review_pdf || returnedArtifacts.final_fixed_pdf || returnedArtifacts.fixed_pdf || 'fixed.pdf';
+                 returnedArtifacts.fixed_pdf = returnedArtifacts.fixed_pdf || 'fixed.pdf';
+                 returnedArtifacts.final_fixed_pdf = returnedArtifacts.final_fixed_pdf || returnedArtifacts.fixed_pdf || 'fixed.pdf';
+             } else if (requiresReview && hasNormalized) {
+                 returnedArtifacts.review_pdf = returnedArtifacts.review_pdf || returnedArtifacts.final_fixed_pdf || returnedArtifacts.normalized_pdf || 'normalized.pdf';
+                 returnedArtifacts.normalized_pdf = returnedArtifacts.normalized_pdf || 'normalized.pdf';
+                 returnedArtifacts.final_fixed_pdf = returnedArtifacts.final_fixed_pdf || returnedArtifacts.normalized_pdf || 'normalized.pdf';
+             }
+
+             if (productionCertified === false) {
+                 delete returnedArtifacts.certified_pdf;
+             }
+        }
+
         return {
             id: canonicalId,
             jobId: canonicalId,
@@ -1411,7 +1477,7 @@ class PreflightService {
             analysis_warnings,
             createdAt: job?.created_at || new Date().toISOString(),
             ...autofixRootLifts,
-            artifacts: isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList
+            artifacts: returnedArtifacts
         };
     }
 }

@@ -35,6 +35,109 @@ const service = new PreflightService(
     storage
 );
 
+function resolveArtifactByAlias({ artifacts, artifactList, requestedKey, requiresReview, productionCertified }) {
+    const candidateTypes = {
+        review_pdf: ['review_pdf', 'final_fixed_pdf', 'fixed_pdf', 'normalized_pdf'],
+        final_fixed_pdf: ['final_fixed_pdf', 'fixed_pdf', 'normalized_pdf', 'certified_pdf'],
+        fixed_pdf: ['fixed_pdf', 'final_fixed_pdf'],
+        normalized_pdf: ['normalized_pdf', 'fixed_pdf', 'final_fixed_pdf'],
+        certified_pdf: ['certified_pdf'],
+        fix_audit: ['fix_audit'],
+        analysis_report: ['analysis_report', 'report_json'],
+        report_json: ['analysis_report', 'report_json']
+    };
+
+    const candidateFilenames = {
+        review_pdf: ['fixed.pdf', 'normalized.pdf'],
+        final_fixed_pdf: ['fixed.pdf', 'normalized.pdf', 'certified.pdf'],
+        fixed_pdf: ['fixed.pdf', 'normalized.pdf'],
+        normalized_pdf: ['normalized.pdf', 'fixed.pdf'],
+        certified_pdf: ['certified.pdf'],
+        fix_audit: ['fix_audit.json'],
+        analysis_report: ['report.json'],
+        report_json: ['report.json']
+    };
+
+    let resolvedType = null;
+    let resolvedFilename = null;
+
+    const types = candidateTypes[requestedKey];
+    const filenames = candidateFilenames[requestedKey];
+
+    if (types && filenames) {
+        // A. Look in artifacts object by candidate key
+        if (artifacts && typeof artifacts === 'object') {
+            for (const t of types) {
+                if (artifacts[t]) {
+                    resolvedType = t;
+                    resolvedFilename = artifacts[t];
+                    break;
+                }
+            }
+        }
+
+        // B. Look in artifactList by candidate type
+        if (!resolvedFilename && artifactList && Array.isArray(artifactList)) {
+            for (const t of types) {
+                const found = artifactList.find(a => a.type === t);
+                if (found) {
+                    resolvedType = t;
+                    resolvedFilename = found.name;
+                    break;
+                }
+            }
+        }
+
+        // C & D. Look in artifactList by candidate filename
+        if (!resolvedFilename && artifactList && Array.isArray(artifactList)) {
+            for (const f of filenames) {
+                const found = artifactList.find(a => a.name === f);
+                if (found) {
+                    resolvedType = found.type;
+                    resolvedFilename = f;
+                    break;
+                }
+            }
+        }
+    }
+
+    // E. Exact id/name/type match as final fallback
+    if (!resolvedFilename && artifactList && Array.isArray(artifactList)) {
+        const found = artifactList.find(a => a.id === requestedKey || a.name === requestedKey || a.type === requestedKey);
+        if (found) {
+            resolvedType = found.type;
+            resolvedFilename = found.name;
+        }
+    }
+
+    // Specific constraints
+    if (requestedKey === 'review_pdf' && requiresReview && resolvedFilename === 'certified.pdf') {
+        resolvedFilename = null;
+        resolvedType = null;
+    }
+    if (requestedKey === 'review_pdf' && productionCertified === false && resolvedFilename === 'certified.pdf') {
+        resolvedFilename = null;
+        resolvedType = null;
+    }
+    if (requestedKey === 'certified_pdf' && requiresReview && resolvedFilename === 'fixed.pdf') {
+        resolvedFilename = null;
+        resolvedType = null;
+    }
+
+    if (resolvedFilename) {
+        return {
+            requestedKey,
+            resolvedKey: resolvedType || requestedKey,
+            filename: resolvedFilename,
+            name: resolvedFilename,
+            type: resolvedType || requestedKey,
+            source: 'artifacts'
+        };
+    }
+
+    return null;
+}
+
 async function preflightRoutes(fastify, options) {
     /**
      * POST /api/preflight/jobs
@@ -324,37 +427,31 @@ async function preflightRoutes(fastify, options) {
         try {
             // Get all known artifacts for the job
             const artifacts = await service.getJobArtifacts(jobId, auth.tenantId);
-            let resolvedArtifact = null;
+            const jobStatus = await service.getJobStatus(jobId, request.context);
 
-            // 0. Pre-resolve alias if artifactId matches standard aliases
-            if (artifactId === 'final_fixed_pdf') {
-                const targetFileNames = ['fixed.pdf', 'normalized.pdf', 'certified.pdf'];
-                for (const targetName of targetFileNames) {
-                    resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === targetName.toLowerCase());
-                    if (resolvedArtifact) break;
-                }
-            } else if (artifactId === 'certified_pdf') {
-                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === 'certified.pdf');
-            } else if (artifactId === 'analysis_report') {
-                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === 'report.json');
-            }
+            const requiresReview = jobStatus?.result?.requires_human_review === true || jobStatus?.result?.requiresHumanReview === true || jobStatus?.result?.summary?.after?.requires_human_review === true || jobStatus?.status === 'COMPLETED_WITH_REVIEW' || jobStatus?.status === 'AUTOFIX_PARTIAL';
+            const productionCertified = jobStatus?.result?.production_certified !== false && jobStatus?.result?.productionCertified !== false && jobStatus?.result?.summary?.after?.production_certified !== false;
+            
+            const resolvedArtifact = resolveArtifactByAlias({
+                artifacts: jobStatus?.result?.artifacts || {},
+                artifactList: artifacts,
+                requestedKey: artifactId,
+                requiresReview,
+                productionCertified
+            });
 
-            // 1. Exact filename match
-            if (!resolvedArtifact) {
-                resolvedArtifact = artifacts.find(a => a.name.toLowerCase() === artifactId.toLowerCase());
-            }
+            console.log(`[SERVICE][ARTIFACT-RESOLVE]`, {
+                jobId,
+                tenantId: auth.tenantId,
+                requestedKey: artifactId,
+                resolvedKey: resolvedArtifact?.resolvedKey || null,
+                filename: resolvedArtifact?.filename || null,
+                source: resolvedArtifact?.source || null,
+                requiresReview,
+                productionCertified
+            });
 
-            // 2. Artifact manifest id match
-            if (!resolvedArtifact) {
-                resolvedArtifact = artifacts.find(a => a.id === artifactId);
-            }
-
-            // 3. Artifact type match
-            if (!resolvedArtifact) {
-                resolvedArtifact = artifacts.find(a => a.type === artifactId);
-            }
-
-            const targetFileName = resolvedArtifact ? resolvedArtifact.name : artifactId;
+            const targetFileName = resolvedArtifact ? resolvedArtifact.filename : artifactId;
 
             // Priority search across standard isolation subfolders
             const subfolders = ['output', 'reports', 'input'];
@@ -371,7 +468,6 @@ async function preflightRoutes(fastify, options) {
             if (!finalPath) {
                 // Phase 10+: Contextual Error Propagation
                 // If artifact is missing, check if it's because the job failed
-                const jobStatus = await service.getJobStatus(jobId, request.context);
                 const isFailed = jobStatus?.status === 'FAILED' || jobStatus?.ok === false;
 
                 let message = `Artifact ${artifactId} not found/accessible for job ${jobId}.`;
@@ -385,13 +481,27 @@ async function preflightRoutes(fastify, options) {
                     type: a.type
                 }));
 
+                const knownAliases = [
+                    "review_pdf",
+                    "final_fixed_pdf",
+                    "fixed_pdf",
+                    "normalized_pdf",
+                    "certified_pdf",
+                    "analysis_report",
+                    "report_json",
+                    "fix_audit"
+                ];
+
                 return reply.status(404).send({
                     error: 'ARTIFACT_NOT_FOUND',
                     jobId,
                     artifactId,
-                    requestedAlias: ['final_fixed_pdf', 'certified_pdf', 'analysis_report'].includes(artifactId) ? artifactId : (resolvedArtifact ? resolvedArtifact.type : null),
+                    requestedAlias: knownAliases.includes(artifactId) ? artifactId : (resolvedArtifact ? resolvedArtifact.type : null),
+                    knownAliases,
                     availableArtifacts: available,
-                    message
+                    message,
+                    code: 'ARTIFACT_NOT_FOUND',
+                    requestedArtifact: artifactId
                 });
             }
 
