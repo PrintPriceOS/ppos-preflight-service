@@ -14,6 +14,7 @@ const HashUtility = require('../src/utils/hashUtility');
  * Orchestrates the analysis and autofix lifecycle with governance persistence.
  */
 const policyCatalog = require('./policyCatalog');
+const syncClient = require('./ControlPlaneJobSyncClient');
 
 function classifyEngineResult(report) {
     if (!report) return 'FULL_ENVIRONMENT_FAILURE';
@@ -302,7 +303,7 @@ class PreflightService {
                     { tenantId, requestId: safeRequestId }
                 );
 
-                return {
+                const finalAnalyzeResult = {
                     ...normalizedPayload,
                     ...normalizedPayload.result,
                     id: jobId,
@@ -310,6 +311,29 @@ class PreflightService {
                     ok: normalizedPayload.ok,
                     status: normalizedPayload.status
                 };
+
+                // Push to Control Plane sync
+                syncClient.syncJob({
+                    jobId,
+                    tenantId,
+                    type: 'ANALYZE',
+                    status: jobObjForNorm.status,
+                    source_status: finalAnalyzeResult.analysis_status || finalAnalyzeResult.status,
+                    final_status: finalAnalyzeResult.status,
+                    findings: finalAnalyzeResult.findings,
+                    findingsCount: finalAnalyzeResult.findings?.length || 0,
+                    issuesCount: finalAnalyzeResult.summary?.issue_count || finalAnalyzeResult.findings?.length || 0,
+                    productionCertified: finalAnalyzeResult.productionCertified !== false && finalAnalyzeResult.analysisIntegrity?.certifiable !== false,
+                    requiresHumanReview: finalAnalyzeResult.requiresHumanReview || finalAnalyzeResult.summary?.after?.requires_human_review || false,
+                    reviewReasons: finalAnalyzeResult.reviewReasons || [],
+                    artifacts: finalAnalyzeResult.artifacts || {},
+                    analysisIntegrity: finalAnalyzeResult.analysisIntegrity,
+                    updatedAt: new Date().toISOString()
+                }).catch(err => {
+                    console.warn(`[SERVICE][CONTROL-PLANE-JOB-SYNC][WARN] Unhandled promise rejection: ${err.message}`);
+                });
+
+                return finalAnalyzeResult;
             } catch (err) {
                 if (err.message === 'ENGINE_ANALYSIS_TIMEOUT') {
                     console.error(`[PREFLIGHT][TIMEOUT] Sync analysis timed out for job: ${jobId}`);
@@ -583,6 +607,8 @@ class PreflightService {
                     await fs.copy(fixResult.fixedPath, fixedPath);
                 }
 
+                const artifacts = await this.getJobArtifacts(jobId, tenantId);
+
                 const resultPayload = {
                     sourceJobId: assetId,
                     targetJobId: jobId,
@@ -592,12 +618,21 @@ class PreflightService {
                     requested_fixes: requestedFixesArray,
                     forceBleed: forceBleedFlag,
                     targetProfile: targetProfileStr,
-                    autofix_attempted: true
+                    autofix_attempted: true,
+                    type: 'AUTOFIX'
                 };
+
+                const jobObjForNorm = {
+                    id: jobId,
+                    status: fixResult.ok ? 'COMPLETED' : 'FAILED',
+                    job_type: 'AUTOFIX'
+                };
+
+                const normalizedPayload = this._normalizeJobPayload(jobObjForNorm, artifacts, resultPayload);
 
                 await db.execute(
                     "UPDATE jobs SET status = ?, result = ? WHERE id = ?",
-                    [fixResult.ok ? 'COMPLETED' : 'FAILED', JSON.stringify(resultPayload), jobId],
+                    [normalizedPayload.status, JSON.stringify(normalizedPayload), jobId],
                     { tenantId, requestId: safeRequestId }
                 );
 
@@ -607,15 +642,40 @@ class PreflightService {
                     sourceJobId: assetId,
                     targetJobId: jobId,
                     type: 'AUTOFIX',
-                    ok: fixResult.ok,
-                    status: fixResult.ok ? 'COMPLETED' : 'FAILED',
-                    repairs: fixResult.repairs || [],
-                    fixes: fixesArray,
-                    requested_fixes: requestedFixesArray,
-                    forceBleed: forceBleedFlag,
-                    targetProfile: targetProfileStr
+                    ...normalizedPayload
                 };
-                console.log(`[SERVICE][FIX-ACTION][RESPONSE] Returning immediate inline response. SourceJobId: ${assetId}, FixJobId: ${jobId}, RepairsCount: ${syncResponse.repairs.length}, SkippedCount: 0, FailedCount: 0`);
+
+                // Push to Control Plane sync
+                syncClient.syncJob({
+                    jobId: syncResponse.jobId,
+                    sourceJobId: syncResponse.sourceJobId,
+                    tenantId,
+                    type: 'AUTOFIX',
+                    status: jobObjForNorm.status,
+                    source_status: syncResponse.status,
+                    final_status: syncResponse.status,
+                    requestedFixes: syncResponse.requested_fixes,
+                    repairs: syncResponse.repairs,
+                    appliedFixes: syncResponse.applied_fixes,
+                    skippedFixes: syncResponse.skipped_fixes,
+                    failedFixes: syncResponse.failed_fixes,
+                    requestedFixesCount: syncResponse.requestedFixesCount || 0,
+                    repairsCount: syncResponse.repairsCount || 0,
+                    appliedFixesCount: syncResponse.appliedFixesCount || 0,
+                    skippedFixesCount: syncResponse.skippedFixesCount || 0,
+                    failedFixesCount: syncResponse.failedFixesCount || 0,
+                    productionCertified: syncResponse.productionCertified !== false,
+                    requiresHumanReview: syncResponse.requiresHumanReview === true,
+                    reviewReasons: syncResponse.reviewReasons || [],
+                    artifacts: syncResponse.artifacts || {},
+                    artifact_delta: syncResponse.artifact_delta || {},
+                    analysisIntegrity: syncResponse.analysisIntegrity,
+                    updatedAt: new Date().toISOString()
+                }).catch(err => {
+                    console.warn(`[SERVICE][CONTROL-PLANE-JOB-SYNC][WARN] Unhandled promise rejection: ${err.message}`);
+                });
+
+                console.log(`[SERVICE][FIX-ACTION][RESPONSE] Returning immediate inline response. SourceJobId: ${assetId}, FixJobId: ${jobId}, RepairsCount: ${syncResponse.repairsCount}, SkippedCount: ${syncResponse.skippedFixesCount}, FailedCount: ${syncResponse.failedFixesCount}`);
                 return syncResponse;
             } catch (err) {
                 console.error(`[SERVICE][AUTOFIX][SYNC-ERROR] ${err.message}`);
@@ -1396,12 +1456,20 @@ class PreflightService {
         }
 
         let finalJobStatus = job?.status || 'COMPLETED';
-        const isAutofixJob = job?.job_type === 'AUTOFIX';
+        const isAutofixJob = job?.job_type === 'AUTOFIX' || res?.type === 'AUTOFIX';
 
         if (isAutofixJob) {
-            const skippedFixes = res.skipped_fixes || [];
-            const appliedFixes = res.applied_fixes || res.fixes || res.repairs || [];
-            const failedFixes = res.failed_fixes || [];
+            const allRepairs = res.repairs || res.fixes || [];
+            let skippedFixes = Array.isArray(res.skipped_fixes) ? res.skipped_fixes : [];
+            let appliedFixes = Array.isArray(res.applied_fixes) ? res.applied_fixes : [];
+            let failedFixes = Array.isArray(res.failed_fixes) ? res.failed_fixes : [];
+
+            // Extract from repairs if not explicitly provided
+            if (skippedFixes.length === 0 && appliedFixes.length === 0 && failedFixes.length === 0 && allRepairs.length > 0) {
+                skippedFixes = allRepairs.filter(r => r.status === 'SKIPPED');
+                appliedFixes = allRepairs.filter(r => r.status === 'APPLIED');
+                failedFixes = allRepairs.filter(r => r.status === 'FAILED');
+            }
             
             const skippedFixRequiresHumanReview = (fix) => {
                 return Boolean(
@@ -1413,14 +1481,28 @@ class PreflightService {
                 );
             };
             
-            const skippedRequiresReview = skippedFixes.some(skippedFixRequiresHumanReview);
-            if (appliedFixes.length === 0 && failedFixes.length === 0 && skippedFixes.length > 0 && skippedRequiresReview) {
+            const skippedRequiresReview = skippedFixes.some(skippedFixRequiresHumanReview) || allRepairs.some(skippedFixRequiresHumanReview);
+            
+            normalizedResult.skipped_fixes = skippedFixes;
+            normalizedResult.applied_fixes = appliedFixes;
+            normalizedResult.failed_fixes = failedFixes;
+            normalizedResult.skippedFixesCount = skippedFixes.length;
+            normalizedResult.appliedFixesCount = appliedFixes.length;
+            normalizedResult.failedFixesCount = failedFixes.length;
+            normalizedResult.repairs = allRepairs;
+            normalizedResult.repairsCount = allRepairs.length;
+            normalizedResult.requested_fixes = res.requested_fixes || [];
+            normalizedResult.requestedFixesCount = normalizedResult.requested_fixes.length;
+
+            if (skippedRequiresReview) {
                 finalJobStatus = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.status = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.final_status = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.technicallyFixed = false;
                 normalizedResult.productionCertified = false;
                 normalizedResult.requiresHumanReview = true;
+                normalizedResult.reviewReasons = normalizedResult.reviewReasons || [];
+                normalizedResult.reviewReasons.push("Some fixes were skipped and require review.");
             }
         }
 
@@ -1451,19 +1533,28 @@ class PreflightService {
 
         const autofixRootLifts = {
             ...(res.sourceJobId ? { sourceJobId: res.sourceJobId } : {}),
-            ...(res.repairs ? { repairs: res.repairs } : {}),
-            ...(res.fixes ? { fixes: res.fixes } : {}),
-            ...(res.requested_fixes || res.fixes ? { requested_fixes: res.requested_fixes || res.fixes } : {}),
-            ...(res.skipped_fixes ? { skipped_fixes: res.skipped_fixes } : {}),
-            ...(res.failed_fixes ? { failed_fixes: res.failed_fixes } : {}),
+            ...(normalizedResult.repairs ? { repairs: normalizedResult.repairs } : {}),
+            ...(normalizedResult.fixes ? { fixes: normalizedResult.fixes } : {}),
+            ...(normalizedResult.requested_fixes || normalizedResult.fixes ? { requested_fixes: normalizedResult.requested_fixes || normalizedResult.fixes } : {}),
+            ...(normalizedResult.skipped_fixes ? { skipped_fixes: normalizedResult.skipped_fixes } : {}),
+            ...(normalizedResult.applied_fixes ? { applied_fixes: normalizedResult.applied_fixes } : {}),
+            ...(normalizedResult.failed_fixes ? { failed_fixes: normalizedResult.failed_fixes } : {}),
+            ...(normalizedResult.repairsCount !== undefined ? { repairsCount: normalizedResult.repairsCount } : {}),
+            ...(normalizedResult.requestedFixesCount !== undefined ? { requestedFixesCount: normalizedResult.requestedFixesCount } : {}),
+            ...(normalizedResult.skippedFixesCount !== undefined ? { skippedFixesCount: normalizedResult.skippedFixesCount } : {}),
+            ...(normalizedResult.appliedFixesCount !== undefined ? { appliedFixesCount: normalizedResult.appliedFixesCount } : {}),
+            ...(normalizedResult.failedFixesCount !== undefined ? { failedFixesCount: normalizedResult.failedFixesCount } : {}),
+            ...(normalizedResult.productionCertified !== undefined ? { productionCertified: normalizedResult.productionCertified } : {}),
+            ...(normalizedResult.requiresHumanReview !== undefined ? { requiresHumanReview: normalizedResult.requiresHumanReview } : {}),
+            ...(normalizedResult.reviewReasons ? { reviewReasons: normalizedResult.reviewReasons } : {}),
             ...(res.warnings ? { warnings: res.warnings } : {}),
             ...(res.degraded_reasons ? { degraded_reasons: res.degraded_reasons } : {}),
             ...(res.forceBleed !== undefined ? { forceBleed: res.forceBleed } : {}),
             ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
         };
 
-        const productionCertified = res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false;
-        const requiresReview = res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL";
+        const productionCertified = normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false);
+        const requiresReview = normalizedResult.requiresHumanReview !== undefined ? normalizedResult.requiresHumanReview : (res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL");
 
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
