@@ -346,7 +346,8 @@ async function preflightRoutes(fastify, options) {
                     ...(fixes ? { fixes } : {}),
                     ...(requested_fixes ? { requested_fixes } : {}),
                     ...(body.forceBleed !== undefined ? { forceBleed: body.forceBleed } : {}),
-                    ...(body.targetProfile ? { targetProfile: body.targetProfile } : {})
+                    ...(body.targetProfile ? { targetProfile: body.targetProfile } : {}),
+                    ...(body.magicFixProfile ? { magicFixProfile: body.magicFixProfile } : {})
                 };
                 delete options.policy;
                 delete options.policyId;

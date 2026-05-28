@@ -527,8 +527,13 @@ class PreflightService {
 
         const forceBleedFlag = options.forceBleed ?? false;
         const targetProfileStr = options.targetProfile ?? 'FOGRA51';
+        const magicFixProfileStr = options.magicFixProfile ?? null;
 
-        console.log(`[SERVICE][FIX-ACTION][REQUEST] Received fix action request. SourceJobId: ${assetId}, FixJobId: ${jobId}, RequestedFixes: ${JSON.stringify(requestedFixesArray)}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}`);
+        if (magicFixProfileStr) {
+            options.magicFixProfile = magicFixProfileStr;
+        }
+
+        console.log(`[SERVICE][FIX-ACTION][REQUEST] Received fix action request. SourceJobId: ${assetId}, FixJobId: ${jobId}, RequestedFixes: ${JSON.stringify(requestedFixesArray)}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}, MagicFixProfile: ${magicFixProfileStr}`);
 
         const hasExplicitFixes = fixesArray.length > 0;
         if (!options.type && hasExplicitFixes) {
@@ -583,7 +588,8 @@ class PreflightService {
                     requested_fixes: requestedFixesArray,
                     fixes: fixesArray,
                     forceBleed: forceBleedFlag,
-                    targetProfile: targetProfileStr
+                    targetProfile: targetProfileStr,
+                    magicFixProfile: magicFixProfileStr
                 })
             ],
             { tenantId, requestId: safeRequestId }
@@ -618,6 +624,7 @@ class PreflightService {
                     requested_fixes: requestedFixesArray,
                     forceBleed: forceBleedFlag,
                     targetProfile: targetProfileStr,
+                    magicFixProfile: magicFixProfileStr,
                     autofix_attempted: true,
                     type: 'AUTOFIX'
                 };
@@ -695,6 +702,7 @@ class PreflightService {
             fixes: fixesArray,
             forceBleed: forceBleedFlag,
             targetProfile: targetProfileStr,
+            magicFixProfile: magicFixProfileStr,
             jobId,
             tenantId,
             requestedBy: auth?.userId || 'SYSTEM',
@@ -716,8 +724,8 @@ class PreflightService {
             contractMode: 'v2_emitted'
         };
 
-        console.log(`[SERVICE][FIX-ACTION][QUEUE-PAYLOAD] Enqueueing worker payload. SourceJobId: ${assetId}, FixJobId: ${jobId}, QueuedFixesCount: ${fixesArray.length}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}`);
-        console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${resolvedPolicyProfile})`);
+        console.log(`[SERVICE][FIX-ACTION][QUEUE-PAYLOAD] Enqueueing worker payload. SourceJobId: ${assetId}, FixJobId: ${jobId}, QueuedFixesCount: ${fixesArray.length}, ForceBleed: ${forceBleedFlag}, TargetProfile: ${targetProfileStr}, MagicFixProfile: ${magicFixProfileStr}`);
+        console.log(`[PRELIGHT][JOBS] Emitting V2 AUTOFIX contract for job: ${jobId} (Tenant: ${tenantId}, Profile: ${magicFixProfileStr || resolvedPolicyProfile})`);
 
         const enqueueResult = await this.worker.enqueue('AUTOFIX', jobEnvelope);
 
@@ -731,7 +739,8 @@ class PreflightService {
             requested_fixes: requestedFixesArray,
             fixes: fixesArray,
             forceBleed: forceBleedFlag,
-            targetProfile: targetProfileStr
+            targetProfile: targetProfileStr,
+            magicFixProfile: magicFixProfileStr
         };
 
         console.log(`[SERVICE][AUTOFIX][RESPONSE-CONTRACT] Generated for job: ${jobId} | Source: ${assetId}`);
