@@ -1,4 +1,10 @@
-const fetch = require('node-fetch');
+const fetchImpl = globalThis.fetch;
+
+if (typeof fetchImpl !== 'function') {
+  console.warn('[SERVICE][CONTROL-PLANE-JOB-SYNC][DISABLED]', {
+    reason: 'GLOBAL_FETCH_UNAVAILABLE'
+  });
+}
 
 class ControlPlaneJobSyncClient {
   constructor() {
@@ -50,12 +56,21 @@ class ControlPlaneJobSyncClient {
         headers['Authorization'] = authHeader;
       }
 
-      const res = await fetch(endpoint, {
+      if (typeof fetchImpl !== 'function') {
+        return { ok: false, error: 'GLOBAL_FETCH_UNAVAILABLE' };
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetchImpl(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
-        timeout: 5000 // fail soft/fast
+        signal: controller.signal
       });
+
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const text = await res.text();
