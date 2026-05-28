@@ -1396,6 +1396,34 @@ class PreflightService {
         }
 
         let finalJobStatus = job?.status || 'COMPLETED';
+        const isAutofixJob = job?.job_type === 'AUTOFIX';
+
+        if (isAutofixJob) {
+            const skippedFixes = res.skipped_fixes || [];
+            const appliedFixes = res.applied_fixes || res.fixes || res.repairs || [];
+            const failedFixes = res.failed_fixes || [];
+            
+            const skippedFixRequiresHumanReview = (fix) => {
+                return Boolean(
+                    fix?.requires_human_review === true ||
+                    fix?.requiresHumanReview === true ||
+                    fix?.destructiveFixRisk === "HIGH" ||
+                    String(fix?.code || "").toUpperCase() === "CONVERT_CMYK" ||
+                    /destructive|explicit review|human review/i.test(String(fix?.reason || ""))
+                );
+            };
+            
+            const skippedRequiresReview = skippedFixes.some(skippedFixRequiresHumanReview);
+            if (appliedFixes.length === 0 && failedFixes.length === 0 && skippedFixes.length > 0 && skippedRequiresReview) {
+                finalJobStatus = 'AUTOFIX_REVIEW_REQUIRED';
+                normalizedResult.status = 'AUTOFIX_REVIEW_REQUIRED';
+                normalizedResult.final_status = 'AUTOFIX_REVIEW_REQUIRED';
+                normalizedResult.technicallyFixed = false;
+                normalizedResult.productionCertified = false;
+                normalizedResult.requiresHumanReview = true;
+            }
+        }
+
         if (isEnvFailure) {
             finalJobStatus = 'FAILED';
         } else if (finalJobStatus === 'COMPLETED' || finalJobStatus === 'SUCCESS') {
@@ -1421,7 +1449,6 @@ class PreflightService {
         const partial = !isEnvFailure && (hasArtifactFailure || (documentFindings.length > 0 && !hasBlockingFindings) || engineClass === 'DEGRADED_ANALYSIS' || engineClass === 'PARTIAL_ANALYSIS');
         const analysis_warnings = partial ? documentFindings : [];
 
-        const isAutofixJob = job?.job_type === 'AUTOFIX';
         const autofixRootLifts = {
             ...(res.sourceJobId ? { sourceJobId: res.sourceJobId } : {}),
             ...(res.repairs ? { repairs: res.repairs } : {}),
