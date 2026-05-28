@@ -1484,6 +1484,16 @@ class PreflightService {
              if (productionCertified === false) {
                  delete returnedArtifacts.certified_pdf;
              }
+             
+             if (finalJobStatus === 'AUTOFIX_REVIEW_REQUIRED') {
+                 const af = res.applied_fixes || res.fixes || res.repairs || [];
+                 if (af.length === 0) {
+                     delete returnedArtifacts.review_pdf;
+                     delete returnedArtifacts.fixed_pdf;
+                     delete returnedArtifacts.final_fixed_pdf;
+                     delete returnedArtifacts.certified_pdf;
+                 }
+             }
         }
 
         return {
