@@ -1480,7 +1480,7 @@ class PreflightService {
                 failedFixes = allRepairs.filter(r => r.status === 'FAILED');
             }
             
-            const skippedFixRequiresHumanReview = (fix) => {
+            const fixRequiresHumanReview = (fix) => {
                 return Boolean(
                     fix?.requires_human_review === true ||
                     fix?.requiresHumanReview === true ||
@@ -1490,7 +1490,9 @@ class PreflightService {
                 );
             };
             
-            const skippedRequiresReview = skippedFixes.some(skippedFixRequiresHumanReview) || allRepairs.some(skippedFixRequiresHumanReview);
+            const appliedRequiresReview = appliedFixes.filter(fixRequiresHumanReview);
+            const hasSkipped = skippedFixes.length > 0;
+            const requiresReview = hasSkipped || appliedRequiresReview.length > 0;
             
             normalizedResult.skipped_fixes = skippedFixes;
             normalizedResult.applied_fixes = appliedFixes;
@@ -1503,7 +1505,7 @@ class PreflightService {
             normalizedResult.requested_fixes = res.requested_fixes || [];
             normalizedResult.requestedFixesCount = normalizedResult.requested_fixes.length;
 
-            if (skippedRequiresReview) {
+            if (requiresReview) {
                 finalJobStatus = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.status = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.final_status = 'AUTOFIX_REVIEW_REQUIRED';
@@ -1511,7 +1513,16 @@ class PreflightService {
                 normalizedResult.productionCertified = false;
                 normalizedResult.requiresHumanReview = true;
                 normalizedResult.reviewReasons = normalizedResult.reviewReasons || [];
-                normalizedResult.reviewReasons.push("Some fixes were skipped and require review.");
+                
+                if (hasSkipped) {
+                    normalizedResult.reviewReasons.push("Some fixes were skipped and require review.");
+                } else if (appliedRequiresReview.length > 0) {
+                    if (appliedRequiresReview.some(f => String(f.code || "").toUpperCase() === "CONVERT_CMYK")) {
+                        normalizedResult.reviewReasons.push("CMYK conversion was applied and requires human visual review.");
+                    } else {
+                        normalizedResult.reviewReasons.push("One or more applied fixes require human review before production certification.");
+                    }
+                }
             }
         }
 
