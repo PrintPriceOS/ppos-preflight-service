@@ -1034,7 +1034,29 @@ class PreflightService {
             console.log(`[SERVICE][JOB-STATUS][AUTOFIX-RESULT] Autofix result polled. SourceJobId: ${safeResult.sourceJobId || 'unknown'}, FixJobId: ${jobId}, RequestedFixes: ${JSON.stringify(requestedFixesList)}, ForceBleed: ${!!safeResult.forceBleed}, TargetProfile: ${safeResult.targetProfile || 'FOGRA51'}, RepairsCount: ${repairsList.length}, Repairs: ${JSON.stringify(repairsList)}, SkippedCount: ${skippedList.length}, Skipped: ${JSON.stringify(skippedList)}, FailedCount: ${failedList.length}, Failed: ${JSON.stringify(failedList)}`);
         }
 
-        return this._normalizeJobPayload(job, artifacts, safeResult);
+        let sourceFindings = [];
+        if (isAutofix) {
+            const sourceJobId = safeResult?.sourceJobId || safeResult?.source_job_id;
+            if (sourceJobId) {
+                try {
+                    const [sourceRow] = await db.query(
+                        'SELECT result FROM jobs WHERE id = ? AND tenant_id = ?',
+                        [sourceJobId, auth.tenantId]
+                    );
+                    if (sourceRow?.result) {
+                        const sourceRes = typeof sourceRow.result === 'string'
+                            ? JSON.parse(sourceRow.result)
+                            : sourceRow.result;
+                        sourceFindings = [
+                            ...(Array.isArray(sourceRes.findings) ? sourceRes.findings : []),
+                            ...(Array.isArray(sourceRes.issues) ? sourceRes.issues : [])
+                        ];
+                    }
+                } catch (_) {}
+            }
+        }
+
+        return this._normalizeJobPayload(job, artifacts, safeResult, sourceFindings);
     }
 
 
@@ -1155,12 +1177,66 @@ class PreflightService {
         };
     }
 
+    _buildFixCoverage(findings, repairs) {
+        const repairByCode = {};
+        for (const r of repairs) {
+            if (r?.code) repairByCode[r.code] = r;
+        }
+
+        const fixed = [], skipped = [], failed = [], not_attempted = [];
+
+        for (const f of findings) {
+            const strategy = f?.fix_method || f?.repairStrategy || f?.recommended_fix || null;
+            const entry = {
+                issue_code: f?.code || f?.type || null,
+                severity: f?.severity || null,
+                message: f?.message || f?.description || null,
+                fix_method: strategy
+            };
+
+            if (!strategy) {
+                not_attempted.push(entry);
+                continue;
+            }
+
+            const repair = repairByCode[strategy];
+            if (!repair) {
+                not_attempted.push(entry);
+                continue;
+            }
+
+            const repairEntry = {
+                ...entry,
+                repair_code: repair.code,
+                repair_status: repair.status,
+                repair_reason: repair.reason || repair.message || null
+            };
+
+            if (repair.status === 'APPLIED') fixed.push(repairEntry);
+            else if (repair.status === 'SKIPPED') skipped.push(repairEntry);
+            else if (repair.status === 'FAILED') failed.push(repairEntry);
+            else not_attempted.push(entry);
+        }
+
+        return {
+            total_issues: findings.length,
+            fixed_count: fixed.length,
+            skipped_count: skipped.length,
+            failed_count: failed.length,
+            not_attempted_count: not_attempted.length,
+            fixed,
+            skipped,
+            failed,
+            not_attempted
+        };
+    }
+
     /**
      * _normalizeJobPayload
      * Enforces strict API normalization for job payloads and Control Plane compatibility adapters.
      * Prevents contradictory invariant states, deduplicates findings, and implements separate counters.
      */
-    _normalizeJobPayload(job, artifacts, rawResult) {
+    _normalizeJobPayload(job, artifacts, rawResult, sourceFindings = []) {
         const canonicalId = job?.id || job?.jobId || 'unknown';
         const res = rawResult || {};
         const artifactList = Array.isArray(artifacts) ? artifacts : [];
@@ -1505,6 +1581,13 @@ class PreflightService {
             normalizedResult.requested_fixes = res.requested_fixes || [];
             normalizedResult.requestedFixesCount = normalizedResult.requested_fixes.length;
 
+            const coverageFindings = sourceFindings.length > 0
+                ? sourceFindings
+                : (normalizedResult.findings || []);
+            if (coverageFindings.length > 0 || allRepairs.length > 0) {
+                normalizedResult.fix_coverage = this._buildFixCoverage(coverageFindings, allRepairs);
+            }
+
             if (requiresReview) {
                 finalJobStatus = 'AUTOFIX_REVIEW_REQUIRED';
                 normalizedResult.status = 'AUTOFIX_REVIEW_REQUIRED';
@@ -1567,6 +1650,7 @@ class PreflightService {
             ...(normalizedResult.productionCertified !== undefined ? { productionCertified: normalizedResult.productionCertified } : {}),
             ...(normalizedResult.requiresHumanReview !== undefined ? { requiresHumanReview: normalizedResult.requiresHumanReview } : {}),
             ...(normalizedResult.reviewReasons ? { reviewReasons: normalizedResult.reviewReasons } : {}),
+            ...(normalizedResult.fix_coverage ? { fix_coverage: normalizedResult.fix_coverage } : {}),
             ...(res.warnings ? { warnings: res.warnings } : {}),
             ...(res.degraded_reasons ? { degraded_reasons: res.degraded_reasons } : {}),
             ...(res.forceBleed !== undefined ? { forceBleed: res.forceBleed } : {}),
