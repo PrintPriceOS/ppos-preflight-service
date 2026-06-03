@@ -1047,10 +1047,9 @@ class PreflightService {
                         const sourceRes = typeof sourceRow.result === 'string'
                             ? JSON.parse(sourceRow.result)
                             : sourceRow.result;
-                        sourceFindings = [
-                            ...(Array.isArray(sourceRes.findings) ? sourceRes.findings : []),
-                            ...(Array.isArray(sourceRes.issues) ? sourceRes.issues : [])
-                        ];
+                        sourceFindings = Array.isArray(sourceRes.findings) && sourceRes.findings.length > 0
+                            ? sourceRes.findings
+                            : (Array.isArray(sourceRes.issues) ? sourceRes.issues : []);
                     }
                 } catch (_) {}
             }
