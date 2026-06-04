@@ -1046,6 +1046,8 @@ class PreflightService {
         let productionCertified = true;
         let isAutofix = false;
         let status = '';
+        let res = {};
+        let dbHasUpdates = false;
 
         try {
             const [jobRows] = await db.query("SELECT * FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
@@ -1053,7 +1055,6 @@ class PreflightService {
             if (job) {
                 isAutofix = job.job_type === 'AUTOFIX';
                 status = job.status;
-                let res = {};
                 if (typeof job.result === 'string') {
                     try { res = JSON.parse(job.result); } catch(e) {}
                 } else if (job.result && typeof job.result === 'object') {
@@ -1070,9 +1071,39 @@ class PreflightService {
         try {
             if (await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
+                
+                res.artifacts_metadata = res.artifacts_metadata || {}; 
+
                 for (const file of files) {
                     const filePath = path.join(outputDir, file);
                     const stats = await fs.stat(filePath);
+                    
+                    let checksum_sha256 = null;
+                    let checksum_status = null;
+                    let checksum_error = null;
+                    
+                    // Worker might have provided metadata
+                    let workerMeta = null;
+                    if (Array.isArray(res.artifacts)) {
+                        workerMeta = res.artifacts.find(a => a.name === file || a.filename === file);
+                    }
+                    
+                    if (workerMeta && workerMeta.checksum_sha256 && (workerMeta.size_bytes === undefined || workerMeta.size_bytes === stats.size)) {
+                        checksum_sha256 = workerMeta.checksum_sha256;
+                    } else if (res.artifacts_metadata[file] && res.artifacts_metadata[file].checksum_sha256 && res.artifacts_metadata[file].size_bytes === stats.size) {
+                        checksum_sha256 = res.artifacts_metadata[file].checksum_sha256;
+                    } else if (stats.size > 0) {
+                        try {
+                            checksum_sha256 = await HashUtility.computeFileHash(filePath);
+                            res.artifacts_metadata[file] = res.artifacts_metadata[file] || {};
+                            res.artifacts_metadata[file].checksum_sha256 = checksum_sha256;
+                            res.artifacts_metadata[file].size_bytes = stats.size;
+                            dbHasUpdates = true;
+                        } catch (hashErr) {
+                            checksum_status = 'UNAVAILABLE';
+                            checksum_error = hashErr.message;
+                        }
+                    }
 
                     const pushArtifact = (type) => {
                         artifacts.push({
@@ -1080,10 +1111,20 @@ class PreflightService {
                             jobId,
                             type,
                             name: file,
+                            filename: file,
                             path: `/jobs/${jobId}/output/${file}`,
                             mimeType: this._getMimeByExt(path.extname(file)),
-                            size: stats.size,
+                            mime_type: this._getMimeByExt(path.extname(file)),
+                            size: stats.size, // fallback
+                            size_bytes: stats.size,
+                            storage_key: filePath,
+                            checksum_sha256,
+                            ...(checksum_status ? { checksum_status } : {}),
+                            ...(checksum_error ? { checksum_error } : {}),
+                            downloadable: stats.size > 0,
+                            requires_review: (type === 'review_pdf') ? true : false,
                             createdAt: stats.birthtime,
+                            created_at: stats.birthtime,
                             status: 'READY'
                         });
                     };
@@ -1114,6 +1155,10 @@ class PreflightService {
                     } else {
                         pushArtifact('output_file');
                     }
+                }
+                
+                if (dbHasUpdates && status) {
+                    await db.execute("UPDATE jobs SET result = ? WHERE id = ? AND tenant_id = ?", [JSON.stringify(res), jobId, tenantId]);
                 }
             }
         } catch (err) {

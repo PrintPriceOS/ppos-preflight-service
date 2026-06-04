@@ -402,14 +402,96 @@ async function preflightRoutes(fastify, options) {
 
             if (!jobStatus) {
                 return reply.status(404).send({
-                    error: 'NOT_FOUND',
+                    ok: false,
+                    error: 'JOB_NOT_FOUND',
                     message: 'Job not found or access denied.'
                 });
             }
 
-            return jobStatus;
+            // Phase 42B: Attach artifacts and artifact_summary
+            const artifacts = await service.getJobArtifacts(jobId, request.context.auth.tenantId);
+            const artifact_count = artifacts.length;
+            const downloadable_artifact_count = artifacts.filter(a => a.downloadable).length;
+            const zero_byte_artifact_count = artifacts.filter(a => !a.downloadable).length;
+            const has_fixed_pdf_bytes = artifacts.some(a => ['fixed_pdf', 'final_fixed_pdf'].includes(a.type) && a.downloadable);
+            
+            let physical_artifacts_ready = false;
+            let artifact_error = undefined;
+
+            if (artifact_count > 0 && downloadable_artifact_count > 0) {
+                physical_artifacts_ready = true;
+            } else if (jobStatus.type === 'AUTOFIX' && (jobStatus.status === 'COMPLETED' || jobStatus.status === 'AUTOFIX_REVIEW_REQUIRED' || jobStatus.status === 'COMPLETED_WITH_REVIEW')) {
+                if (!has_fixed_pdf_bytes) {
+                    physical_artifacts_ready = false;
+                    artifact_error = "NO_FIXED_PDF_BYTES_PRODUCED";
+                }
+            }
+
+            const response = {
+                ok: true,
+                job: {
+                    ...jobStatus,
+                    artifacts: artifacts,
+                    artifact_summary: {
+                        artifact_count,
+                        downloadable_artifact_count,
+                        zero_byte_artifact_count,
+                        physical_artifacts_ready,
+                        ...(artifact_error ? { artifact_error } : {})
+                    }
+                }
+            };
+
+            return response;
         } catch (err) {
             console.error(`[PRELIGHT][ERROR] GET /jobs/:id - ${err.message}`);
+            throw err;
+        }
+    });
+
+    /**
+     * GET /api/preflight/jobs/:id/artifacts
+     */
+    fastify.get('/jobs/:id/artifacts', { preHandler: [requireScope('jobs:read')] }, async (request, reply) => {
+        const { id: jobId } = request.params;
+
+        IdentityValidator.validate(jobId, 'ArtifactList');
+
+        try {
+            const artifacts = await service.getJobArtifacts(jobId, request.context.auth.tenantId);
+            const jobStatus = await service.getJobStatus(jobId, request.context);
+
+            const artifact_count = artifacts.length;
+            const downloadable_artifact_count = artifacts.filter(a => a.downloadable).length;
+            const zero_byte_artifact_count = artifacts.filter(a => !a.downloadable).length;
+            const has_fixed_pdf_bytes = artifacts.some(a => ['fixed_pdf', 'final_fixed_pdf'].includes(a.type) && a.downloadable);
+            
+            let physical_artifacts_ready = false;
+            let artifact_error = undefined;
+            let message = undefined;
+
+            if (artifact_count > 0 && downloadable_artifact_count > 0) {
+                physical_artifacts_ready = true;
+            } else if (jobStatus && jobStatus.type === 'AUTOFIX' && (jobStatus.status === 'COMPLETED' || jobStatus.status === 'AUTOFIX_REVIEW_REQUIRED' || jobStatus.status === 'COMPLETED_WITH_REVIEW')) {
+                if (!has_fixed_pdf_bytes) {
+                    physical_artifacts_ready = false;
+                    artifact_error = "NO_FIXED_PDF_BYTES_PRODUCED";
+                    message = "No fixed PDF bytes were produced for this job.";
+                }
+            }
+
+            return {
+                ok: true,
+                job_id: jobId,
+                artifacts: artifacts,
+                downloadable_artifact_count,
+                zero_byte_artifact_count,
+                physical_artifacts_ready,
+                ...(artifact_error ? { artifact_error } : {}),
+                ...(message ? { message } : {})
+            };
+        } catch (err) {
+            console.error(`[PRELIGHT][ERROR] GET /jobs/:id/artifacts - ${err.message}`);
             throw err;
         }
     });
@@ -454,6 +536,13 @@ async function preflightRoutes(fastify, options) {
 
             const targetFileName = resolvedArtifact ? resolvedArtifact.filename : artifactId;
 
+            if (!resolvedArtifact && !artifacts.some(a => a.id === artifactId || a.name === artifactId || a.type === artifactId)) {
+                return reply.status(404).send({
+                    ok: false,
+                    error: 'ARTIFACT_NOT_FOUND'
+                });
+            }
+
             // Priority search across standard isolation subfolders
             const subfolders = ['output', 'reports', 'input'];
             let finalPath = null;
@@ -467,47 +556,24 @@ async function preflightRoutes(fastify, options) {
             }
 
             if (!finalPath) {
-                // Phase 10+: Contextual Error Propagation
-                // If artifact is missing, check if it's because the job failed
-                const isFailed = jobStatus?.status === 'FAILED' || jobStatus?.ok === false;
-
-                let message = `Artifact ${artifactId} not found/accessible for job ${jobId}.`;
-                if (isFailed) {
-                    message = `Artifact ${artifactId} was not produced because the ${jobStatus.type || 'processing'} job failed. Root cause: ${jobStatus.error || 'Unknown engine failure'}.`;
-                }
-
-                const available = artifacts.map(a => ({
-                    id: a.id,
-                    name: a.name,
-                    type: a.type
-                }));
-
-                const knownAliases = [
-                    "review_pdf",
-                    "final_fixed_pdf",
-                    "fixed_pdf",
-                    "normalized_pdf",
-                    "certified_pdf",
-                    "analysis_report",
-                    "report_json",
-                    "fix_audit"
-                ];
-
-                return reply.status(404).send({
-                    error: 'ARTIFACT_NOT_FOUND',
-                    jobId,
-                    artifactId,
-                    requestedAlias: knownAliases.includes(artifactId) ? artifactId : (resolvedArtifact ? resolvedArtifact.type : null),
-                    knownAliases,
-                    availableArtifacts: available,
-                    message,
-                    code: 'ARTIFACT_NOT_FOUND',
-                    requestedArtifact: artifactId
+                return reply.status(409).send({
+                    ok: false,
+                    error: 'ARTIFACT_STORAGE_MISSING',
+                    reason: 'PHYSICAL_FILE_NOT_FOUND'
                 });
             }
-
+            
             // Phase 10: isolation breach verification
             storage.verifyPathIsolation(auth.tenantId, finalPath);
+
+            const stats = await fs.stat(finalPath);
+            if (stats.size === 0) {
+                return reply.status(409).send({
+                    ok: false,
+                    error: 'ARTIFACT_NOT_DOWNLOADABLE',
+                    reason: 'ZERO_BYTE_ARTIFACT_OR_MISSING_STORAGE_REF'
+                });
+            }
 
             const ext = path.extname(targetFileName).toLowerCase();
             const mimeTypes = {
@@ -524,6 +590,8 @@ async function preflightRoutes(fastify, options) {
 
             // Enforce attachment for binaries or PDFs to ensure browser safety
             if (contentType === 'application/octet-stream' || ext === '.pdf') {
+                reply.header('Content-Disposition', `attachment; filename="${targetFileName}"`);
+            } else if (ext === '.json') {
                 reply.header('Content-Disposition', `attachment; filename="${targetFileName}"`);
             }
 
