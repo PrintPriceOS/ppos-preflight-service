@@ -29,9 +29,18 @@ async function runSmokeTests() {
     // A. Capability Endpoint
     console.log("\n--- Testing FixCapabilityContract ---");
     const caps = FixCapabilityContract.getCapabilities();
+    assertEq("Root ok is true", caps.ok, true);
     assertEq("Capability version", caps.version, "46.0");
     assertEq("Policy modes length", caps.policy_modes.length, 3);
+    assertTrue("Capabilities count >= 12", caps.capabilities.length >= 12);
     
+    const applyBleed = caps.capabilities.find(c => c.fix_id === "APPLY_BLEED");
+    assertTrue("APPLY_BLEED found", !!applyBleed);
+    assertEq("APPLY_BLEED requires_human_review", applyBleed.requires_human_review, true);
+    assertEq("APPLY_BLEED risk_level", applyBleed.risk_level, "MEDIUM");
+    assertEq("APPLY_BLEED production_safe", applyBleed.production_safe, false);
+    assertTrue("APPLY_BLEED message correct", applyBleed.operator_message.includes("Box expansion only"));
+
     const trimbox = caps.capabilities.find(c => c.fix_id === "REBUILD_TRIMBOX");
     assertTrue("REBUILD_TRIMBOX found", !!trimbox);
     assertEq("REBUILD_TRIMBOX implemented", trimbox.implemented, true);
@@ -47,6 +56,26 @@ async function runSmokeTests() {
     const cmyk = caps.capabilities.find(c => c.fix_id === "CONVERT_CMYK");
     assertTrue("CONVERT_CMYK found", !!cmyk);
     assertEq("CONVERT_CMYK requires_human_review", cmyk.requires_human_review, true);
+
+    const flattenAnnotations = caps.capabilities.find(c => c.fix_id === "FLATTEN_ANNOTATIONS");
+    assertTrue("FLATTEN_ANNOTATIONS found", !!flattenAnnotations);
+    assertEq("FLATTEN_ANNOTATIONS implemented", flattenAnnotations.implemented, true);
+
+    const flattenForms = caps.capabilities.find(c => c.fix_id === "FLATTEN_FORMS");
+    assertTrue("FLATTEN_FORMS found", !!flattenForms);
+    assertEq("FLATTEN_FORMS implemented", flattenForms.implemented, true);
+
+    const rebuildXref = caps.capabilities.find(c => c.fix_id === "REBUILD_XREF");
+    assertTrue("REBUILD_XREF found", !!rebuildXref);
+    assertEq("REBUILD_XREF implemented", rebuildXref.implemented, true);
+
+    const injectOutputIntent = caps.capabilities.find(c => c.fix_id === "INJECT_OUTPUT_INTENT");
+    assertTrue("INJECT_OUTPUT_INTENT found", !!injectOutputIntent);
+    assertEq("INJECT_OUTPUT_INTENT implemented", injectOutputIntent.implemented, true);
+
+    const visualBleedExtension = caps.capabilities.find(c => c.fix_id === "VISUAL_BLEED_EXTENSION");
+    assertTrue("VISUAL_BLEED_EXTENSION found", !!visualBleedExtension);
+    assertEq("VISUAL_BLEED_EXTENSION implemented", visualBleedExtension.implemented, false);
 
     // B. FixAuditNormalizer
     console.log("\n--- Testing FixAuditNormalizer ---");
@@ -79,9 +108,6 @@ async function runSmokeTests() {
     const missingAudit = FixAuditNormalizer.normalize(null);
     assertEq("Missing Normalization available", missingAudit.available, false);
     assertEq("Missing requested count", missingAudit.requested_count, 0);
-
-    // D & E Artifact metadata and certification mapping (tested in unit/integration normally, mocking basic output logic here)
-    // We already patched the PreflightService.js which will do the logic correctly if requested.
 
     console.log("\n--- Smoke Tests Completed ---");
     console.log(`Passed: ${passed}`);
