@@ -1,0 +1,425 @@
+{
+  "worker_report_path": "C:\\Users\\KIKE\\Downloads\\ppos-preflight-worker-phase-10-intelligence-layer\\reports\\phase52e_worker_color_real_policy.json",
+  "reports": [
+    {
+      "scenario": "Real Engine: rgb_text_device_rgb.pdf",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Real Engine: rgb_image.pdf",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Real Engine: mixed_rgb_cmyk.pdf",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Real Engine: missing_outputintent.pdf",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Real Engine: rgb_convert_cmyk.pdf",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: CONVERT_CMYK applied",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": true,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "CONVERT_CMYK"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: INJECT_OUTPUT_INTENT only",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "LOW",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [],
+        "production_certified": true,
+        "certified_pdf_allowed": false
+      },
+      "review_required": false,
+      "production_certified": true,
+      "artifact_summary": {
+        "artifact_count": 5,
+        "downloadable_artifact_count": 5,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": false,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": true,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: INJECT_OUTPUT_INTENT + ICC_MISMATCH",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "ICC_MISMATCH"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: RGB_IMAGES unresolved",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "RGB_IMAGES"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: MIXED_RGB_CMYK unresolved",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "MIXED_RGB_CMYK"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: REDUCE_TAC unsupported",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [
+          "REDUCE_TAC"
+        ],
+        "review_required_color_reasons": [
+          "REDUCE_TAC"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: RICH_BLACK_TEXT finding",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "RICH_BLACK_TEXT"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    },
+    {
+      "scenario": "Synthetic: REGISTRATION_COLOR_MISUSE finding",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "normalized_color_governance": {
+        "highest_color_risk": "HIGH",
+        "destructive_color_fix_applied": false,
+        "unsupported_color_fixes": [],
+        "review_required_color_reasons": [
+          "REGISTRATION_COLOR_MISUSE"
+        ],
+        "production_certified": false,
+        "certified_pdf_allowed": false
+      },
+      "review_required": true,
+      "production_certified": false,
+      "artifact_summary": {
+        "artifact_count": 6,
+        "downloadable_artifact_count": 6,
+        "zero_byte_artifact_count": 0,
+        "physical_artifacts_ready": true,
+        "certified_pdf_available": true,
+        "fixed_pdf_available": true,
+        "review_pdf_available": true,
+        "report_available": false,
+        "fix_audit_available": true,
+        "delta_report_available": true,
+        "production_ready_artifact_available": false,
+        "review_required_artifact_available": true
+      },
+      "certified_pdf_downgraded": false,
+      "service_preserved_detector_gap": true,
+      "pass": true
+    }
+  ],
+  "overall_pass": true
+}
