@@ -1310,6 +1310,44 @@ class PreflightService {
             }
         }
 
+        const imageGovSources = [
+            fixAuditData?.image_quality_governance,
+            fixAuditData?.delta_report?.image_quality_governance,
+            res.fix_summary?.image_quality_governance,
+            deltaReportData?.image_quality_governance,
+            res.delta_report?.image_quality_governance,
+            res.delta_summary?.image_quality_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let imageGovActive = false;
+        let imageCertPdfAllowed = true;
+        for (const src of imageGovSources) {
+            if (src) {
+                if (src.review_required === true) imageGovActive = true;
+                if (src.certified_pdf_allowed === false) imageCertPdfAllowed = false;
+                if (src.production_certified === false) imageGovActive = true;
+                if (src.visual_image_rewrite_applied === true) imageGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) imageGovActive = true;
+                if (src.low_res_images_present === true) imageGovActive = true;
+                if (src.excessive_resolution_present === true) imageGovActive = true;
+                if (src.jpeg_artifacts_present === true) imageGovActive = true;
+                if (src.image_replacement_required === true) imageGovActive = true;
+                if (src.bitmap_text_risk === true) imageGovActive = true;
+                if (src.rasterized_vector_risk === true) imageGovActive = true;
+                if (src.image_object_damaged === true) imageGovActive = true;
+            }
+        }
+
+        if (imageGovActive || imageCertPdfAllowed === false) {
+            productionCertified = false;
+            if (imageGovActive) {
+                requiresReview = true;
+            }
+        }
+
         try {
             if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);

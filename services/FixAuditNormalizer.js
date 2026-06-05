@@ -26,12 +26,17 @@ class FixAuditNormalizer {
                     if (!fix || typeof fix !== 'object') return fix;
                     return {
                         ...fix,
-                        moved_from_applied_to_skipped: fix.moved_from_applied_to_skipped,
-                        moved_from_applied_to_review_reason: fix.moved_from_applied_to_review_reason,
+                        code: fix.code,
+                        status: fix.status,
                         reason: fix.reason,
+                        risk_level: fix.risk_level,
+                        requires_human_review: fix.requires_human_review,
+                        production_safe: fix.production_safe,
                         evidence: fix.evidence,
                         visually_sensitive: fix.visually_sensitive,
-                        destructive: fix.destructive
+                        destructive: fix.destructive,
+                        moved_from_applied_to_skipped: fix.moved_from_applied_to_skipped,
+                        moved_from_applied_to_review_reason: fix.moved_from_applied_to_review_reason
                     };
                 });
             };
@@ -83,10 +88,25 @@ class FixAuditNormalizer {
             if (auditData.input_mode !== undefined) ret.input_mode = auditData.input_mode;
             if (auditData.engine_real_detection !== undefined) ret.engine_real_detection = auditData.engine_real_detection;
 
+            // Image Quality Governance
+            if (auditData.image_quality_governance) ret.image_quality_governance = auditData.image_quality_governance;
+            if (auditData.highest_image_quality_risk) ret.highest_image_quality_risk = auditData.highest_image_quality_risk;
+            if (auditData.visual_image_rewrite_applied !== undefined) ret.visual_image_rewrite_applied = auditData.visual_image_rewrite_applied;
+            if (auditData.unsupported_image_quality_fixes) ret.unsupported_image_quality_fixes = auditData.unsupported_image_quality_fixes;
+            if (auditData.low_res_images_present !== undefined) ret.low_res_images_present = auditData.low_res_images_present;
+            if (auditData.excessive_resolution_present !== undefined) ret.excessive_resolution_present = auditData.excessive_resolution_present;
+            if (auditData.jpeg_artifacts_present !== undefined) ret.jpeg_artifacts_present = auditData.jpeg_artifacts_present;
+            if (auditData.image_replacement_required !== undefined) ret.image_replacement_required = auditData.image_replacement_required;
+            if (auditData.bitmap_text_risk !== undefined) ret.bitmap_text_risk = auditData.bitmap_text_risk;
+            if (auditData.rasterized_vector_risk !== undefined) ret.rasterized_vector_risk = auditData.rasterized_vector_risk;
+            if (auditData.image_object_damaged !== undefined) ret.image_object_damaged = auditData.image_object_damaged;
+            if (auditData.image_rewrite_performed !== undefined) ret.image_rewrite_performed = auditData.image_rewrite_performed;
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
                 if (auditData.delta_report.transparency_overprint_governance) ret.delta_report.transparency_overprint_governance = auditData.delta_report.transparency_overprint_governance;
+                if (auditData.delta_report.image_quality_governance) ret.delta_report.image_quality_governance = auditData.delta_report.image_quality_governance;
             }
 
             return ret;

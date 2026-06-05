@@ -1,0 +1,41 @@
+{
+  "scenarios": [
+    {
+      "name": "Capability contract matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalize LOW_RES_IMAGES",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalize JPEG_ARTIFACTS",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalize BITMAP_TEXT_RISK",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalize unsupported UPSCALE_LOW_RES_IMAGES",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalize unsupported REPLACE_LOW_RES_IMAGES",
+      "status": "PASS"
+    },
+    {
+      "name": "Future applied visual image rewrite",
+      "status": "PASS"
+    },
+    {
+      "name": "Certified PDF downgrade",
+      "status": "PASS"
+    }
+  ],
+  "summary": {
+    "total": 95,
+    "passed": 95,
+    "failed": 0
+  }
+}
