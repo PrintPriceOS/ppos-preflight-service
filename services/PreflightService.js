@@ -926,70 +926,103 @@ class PreflightService {
 
         console.log(`[PRELIGHT][JOBS] Querying status for job: ${jobId}`);
 
-        const [job] = await db.query(
-            "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?",
-            [jobId, auth.tenantId]
-        );
+        let job = null;
+        let dbRows = [];
+        try {
+            const [jobRows] = await db.query(
+                "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?",
+                [jobId, auth.tenantId]
+            );
+            dbRows = jobRows;
+            job = jobRows[0];
+        } catch(e) {}
 
-        if (!job) return null;
+        let source_status = "SERVICE_RUNTIME";
+        let isSynthetic = false;
+        const physicalOutputDir = await this._resolvePhysicalOutputDir(jobId, auth.tenantId);
+
+        if (!job) {
+            if (physicalOutputDir) {
+                console.log(`[PREFLIGHT-SERVICE][PHYSICAL_OUTPUT_FALLBACK_START] Synthesizing job ${jobId}`);
+                isSynthetic = true;
+                source_status = "PHYSICAL_OUTPUT_FALLBACK";
+                job = {
+                    id: jobId,
+                    job_type: jobId.startsWith('fix_') ? 'AUTOFIX' : 'ANALYZE',
+                    status: 'COMPLETED', // will be refined later
+                    progress: 100,
+                    result: {},
+                    created_at: new Date()
+                };
+            } else {
+                return null;
+            }
+        }
 
         const canonicalId = job.id;
         console.log(`[SERVICE][JOB][PUBLIC-ID-NORMALIZED] Mapping data for ${canonicalId} (Type: ${job.job_type})`);
 
         // Map internal result string to object if necessary
-        let result = job.result;
+        let result = job.result || {};
         if (typeof result === 'string') {
             try { result = JSON.parse(result); } catch (e) { }
         }
 
         const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
         
+        // Determine hydration source_status
+        if (!isSynthetic && physicalOutputDir && (!artifacts.length || !result.fix_summary || !result.fix_summary.available)) {
+            source_status = "PHYSICAL_OUTPUT_HYDRATED";
+            console.log(`[PREFLIGHT-SERVICE][PHYSICAL_OUTPUT_JOB_HYDRATED] jobId=${jobId}`);
+        }
+        
         let dbHasUpdates = false;
 
-        if (job.job_type === 'AUTOFIX') {
-            const outputDir = this.storage.getJobSubfolder(auth.tenantId, canonicalId, 'output');
-            
-            // Read fix_audit.json if we don't have fix_summary or if we want to ensure it's normalized
-            if (!result.fix_summary) {
-                let fixAuditData = null;
-                try {
-                    const fixAuditPath = path.join(outputDir, 'fix_audit.json');
-                    if (await fs.pathExists(fixAuditPath)) {
-                        fixAuditData = await fs.readJson(fixAuditPath);
+        // Read fix_audit.json if we don't have fix_summary or if we want to ensure it's normalized
+        if (job.job_type === 'AUTOFIX' && (!result.fix_summary || !result.delta_summary)) {
+            const outputDir = await this._resolvePhysicalOutputDir(canonicalId, auth.tenantId);
+            if (outputDir) {
+                if (!result.fix_summary || !result.fix_summary.available) {
+                    let fixAuditData = null;
+                    try {
+                        const fixAuditPath = path.join(outputDir, 'fix_audit.json');
+                        if (await fs.pathExists(fixAuditPath)) {
+                            fixAuditData = await fs.readJson(fixAuditPath);
+                        }
+                    } catch(e) {}
+                    if (fixAuditData) {
+                        result.fix_summary = FixAuditNormalizer.normalize(fixAuditData);
+                        dbHasUpdates = true;
                     }
-                } catch(e) {}
-                result.fix_summary = FixAuditNormalizer.normalize(fixAuditData);
-                dbHasUpdates = true;
-            }
-
-            // Read delta_report.json
-            if (!result.delta_summary) {
-                let deltaReportData = null;
-                try {
-                    const deltaPath = path.join(outputDir, 'delta_report.json');
-                    if (await fs.pathExists(deltaPath)) {
-                        deltaReportData = await fs.readJson(deltaPath);
-                    }
-                } catch(e) {}
-                
-                if (deltaReportData) {
-                    result.delta_summary = {
-                        available: true,
-                        changed: deltaReportData.changed || false,
-                        changes: deltaReportData.changes || [],
-                        operator_summary: deltaReportData.operator_summary || null,
-                        customer_safe_summary: deltaReportData.customer_safe_summary || null,
-                        requires_human_review: deltaReportData.requires_human_review || false,
-                        recommended_operator_action: deltaReportData.recommended_operator_action || null
-                    };
-                } else {
-                    result.delta_summary = { available: false };
                 }
-                dbHasUpdates = true;
+
+                // Read delta_report.json
+                if (!result.delta_summary || !result.delta_summary.available) {
+                    let deltaReportData = null;
+                    try {
+                        const deltaPath = path.join(outputDir, 'delta_report.json');
+                        if (await fs.pathExists(deltaPath)) {
+                            deltaReportData = await fs.readJson(deltaPath);
+                        }
+                    } catch(e) {}
+                    
+                    if (deltaReportData) {
+                        result.delta_summary = {
+                            available: true,
+                            changed: deltaReportData.changed || false,
+                            changes: deltaReportData.changes || [],
+                            operator_summary: deltaReportData.operator_summary || null,
+                            customer_safe_summary: deltaReportData.customer_safe_summary || null,
+                            requires_human_review: deltaReportData.requires_human_review || false,
+                            recommended_operator_action: deltaReportData.recommended_operator_action || null
+                        };
+                        dbHasUpdates = true;
+                    }
+                }
             }
         }
         
-        if (dbHasUpdates) {
+        if (dbHasUpdates && job.id) {
             await db.execute(
                 "UPDATE jobs SET result = ? WHERE id = ?",
                 [JSON.stringify(result), canonicalId],
@@ -1109,13 +1142,47 @@ class PreflightService {
             }
         }
 
-        return this._normalizeJobPayload(job, artifacts, safeResult, sourceFindings);
+        if (safeResult.fix_summary && safeResult.fix_summary.available) {
+            safeResult.production_certified = safeResult.fix_summary.production_certified;
+            safeResult.requires_human_review = safeResult.fix_summary.review_required;
+        }
+
+        let normPayload = this._normalizeJobPayload(job, artifacts, safeResult, sourceFindings);
+        normPayload.source_status = source_status;
+        
+        // Re-assign status if synthetic and we have a review required
+        if (isSynthetic) {
+            normPayload.status = normPayload.review_required ? "REVIEW_REQUIRED" : "COMPLETED";
+            normPayload.display_status = normPayload.status;
+        }
+        
+        return normPayload;
     }
 
+    async _resolvePhysicalOutputDir(jobId, tenantId) {
+        const candidates = [
+            this.storage ? this.storage.getJobSubfolder(tenantId, jobId, 'output') : null,
+            path.join(process.env.PPOS_STORAGE_BASE || (this.storage ? this.storage.getBaseDir() : '/tmp'), 'tenants', tenantId, 'jobs', jobId, 'output'),
+            path.join(process.env.PPOS_UPLOADS_DIR || '/tmp/ppos-uploads', 'tenants', tenantId, 'jobs', jobId, 'output'),
+            path.join(process.env.PPOS_TEMP_DIR || '/tmp/ppos-preflight', 'tenants', tenantId, 'jobs', jobId, 'output'),
+            `/tmp/ppos-preflight/tenants/${tenantId}/jobs/${jobId}/output`
+        ].filter(Boolean);
+
+        for (const dir of candidates) {
+            try {
+                if (await fs.pathExists(dir)) {
+                    console.log(`[PREFLIGHT-SERVICE][PHYSICAL_OUTPUT_DIR_FOUND] jobId=${jobId} dir=${dir}`);
+                    return dir;
+                }
+            } catch(e) {}
+        }
+        console.log(`[PREFLIGHT-SERVICE][PHYSICAL_OUTPUT_FALLBACK_EMPTY] jobId=${jobId}`);
+        return null;
+    }
 
     async getJobArtifacts(jobId, tenantId) {
         const artifacts = [];
-        const outputDir = this.storage.getJobSubfolder(tenantId, jobId, 'output');
+        const outputDir = await this._resolvePhysicalOutputDir(jobId, tenantId);
 
         let requiresReview = false;
         let productionCertified = true;
@@ -1126,8 +1193,8 @@ class PreflightService {
 
         try {
             const [jobRows] = await db.query("SELECT * FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
-            const job = jobRows[0];
-            if (job) {
+            if (jobRows && jobRows.length > 0) {
+                const job = jobRows[0];
                 isAutofix = job.job_type === 'AUTOFIX';
                 status = job.status;
                 if (typeof job.result === 'string') {
@@ -1135,16 +1202,44 @@ class PreflightService {
                 } else if (job.result && typeof job.result === 'object') {
                     res = job.result;
                 }
-                
-                productionCertified = res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false;
-                requiresReview = res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || status === "COMPLETED_WITH_REVIEW" || status === "AUTOFIX_PARTIAL" || productionCertified === false;
+            } else {
+                isAutofix = jobId.startsWith('fix_');
+                status = 'COMPLETED'; // optimistic fallback
             }
+            
+            productionCertified = res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false;
+            requiresReview = res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || status === "COMPLETED_WITH_REVIEW" || status === "AUTOFIX_PARTIAL" || productionCertified === false;
+            
         } catch(e) {
             console.warn(`[ARTIFACT-DISCOVERY-WARN] Could not fetch job ${jobId} for review status check: ${e.message}`);
         }
 
+        let artifactPolicy = {};
+        let fixAuditData = null;
+
+        if (outputDir) {
+            try {
+                const auditPath = path.join(outputDir, 'fix_audit.json');
+                if (await fs.pathExists(auditPath)) {
+                    fixAuditData = await fs.readJson(auditPath);
+                    console.log(`[PREFLIGHT-SERVICE][PHYSICAL_ARTIFACT_HYDRATED] Hydrated fix_audit.json for ${jobId}`);
+                }
+            } catch(e) {}
+        }
+
+        const fixSummary = FixAuditNormalizer.normalize(fixAuditData || res.fix_summary);
+        if (fixSummary && fixSummary.available) {
+            productionCertified = fixSummary.production_certified;
+            requiresReview = fixSummary.review_required;
+            if (fixAuditData && fixAuditData.artifact_policy) {
+                artifactPolicy = fixAuditData.artifact_policy;
+            } else if (res.fix_summary && res.fix_summary.artifact_policy) {
+                artifactPolicy = res.fix_summary.artifact_policy;
+            }
+        }
+
         try {
-            if (await fs.pathExists(outputDir)) {
+            if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
                 
                 res.artifacts_metadata = res.artifacts_metadata || {}; 
@@ -1221,11 +1316,22 @@ class PreflightService {
                     } else if (file === 'delta_report.json') {
                         const a1 = pushArtifact('delta_report');
                         a1.artifact_role = 'TECHNICAL_REPORT';
+                        a1.recommended_use = "Technical change summary";
                     } else if (file === 'certified.pdf') {
                         const a1 = pushArtifact('certified_pdf');
-                        a1.artifact_role = 'PRODUCTION_READY';
-                        a1.customer_visible = true;
-                        a1.production_certified = productionCertified;
+                        const isCertPolicyTrue = artifactPolicy.certified_pdf !== false;
+                        if (productionCertified && isCertPolicyTrue && !requiresReview) {
+                            a1.artifact_role = 'PRODUCTION_READY';
+                            a1.customer_visible = true;
+                            a1.production_certified = true;
+                            a1.recommended_use = "Use as certified production artifact";
+                        } else {
+                            a1.artifact_role = 'REVIEW_REQUIRED';
+                            a1.customer_visible = false;
+                            a1.production_certified = false;
+                            a1.recommended_use = "Do not use as production-certified output; review required.";
+                            console.log(`[PREFLIGHT-SERVICE][CERTIFIED_ARTIFACT_POLICY_DOWNGRADED] jobId=${jobId}`);
+                        }
                     } else if (file === 'fixed.pdf') {
                         const a1 = pushArtifact('fixed_pdf');
                         const a2 = pushArtifact('final_fixed_pdf');
@@ -1252,16 +1358,24 @@ class PreflightService {
                         } else {
                             a1.artifact_role = 'INTERMEDIATE_OUTPUT';
                             a1.customer_visible = false;
+                            a1.recommended_use = "Internal intermediate output";
                         }
                     } else if (file.endsWith('.png')) {
-                        pushArtifact('page_preview');
+                        const a1 = pushArtifact('page_preview');
+                        a1.recommended_use = "Page preview image";
                     } else {
-                        pushArtifact('output_file');
+                        const a1 = pushArtifact('output_file');
+                        a1.recommended_use = "Internal intermediate output";
                     }
                 }
                 
-                if (dbHasUpdates && status) {
-                    await db.execute("UPDATE jobs SET result = ? WHERE id = ? AND tenant_id = ?", [JSON.stringify(res), jobId, tenantId]);
+                if (dbHasUpdates && status && res && Object.keys(res).length > 0) {
+                    try {
+                        const [check] = await db.query("SELECT id FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
+                        if (check && check.length > 0) {
+                            await db.execute("UPDATE jobs SET result = ? WHERE id = ? AND tenant_id = ?", [JSON.stringify(res), jobId, tenantId]);
+                        }
+                    } catch(e) {}
                 }
             }
         } catch (err) {
@@ -1838,6 +1952,22 @@ class PreflightService {
              }
         }
 
+        const artifactListArray = Array.isArray(artifactList) ? artifactList : [];
+        const artifact_summary = {
+            artifact_count: artifactListArray.length,
+            downloadable_artifact_count: artifactListArray.filter(a => a.downloadable).length,
+            zero_byte_artifact_count: artifactListArray.filter(a => !a.downloadable && a.size === 0).length,
+            physical_artifacts_ready: artifactListArray.length > 0,
+            certified_pdf_available: artifactListArray.some(a => a.type === 'certified_pdf' && a.downloadable),
+            fixed_pdf_available: artifactListArray.some(a => (a.type === 'fixed_pdf' || a.type === 'final_fixed_pdf') && a.downloadable),
+            review_pdf_available: artifactListArray.some(a => a.type === 'review_pdf' && a.downloadable),
+            report_available: artifactListArray.some(a => ['analysis_report', 'report_json'].includes(a.type) && a.downloadable),
+            fix_audit_available: artifactListArray.some(a => a.type === 'fix_audit' && a.downloadable),
+            delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
+            production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
+            review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable)
+        };
+
         return {
             id: canonicalId,
             jobId: canonicalId,
@@ -1857,6 +1987,7 @@ class PreflightService {
             createdAt: job?.created_at || new Date().toISOString(),
             ...autofixRootLifts,
             artifacts: returnedArtifacts,
+            artifact_summary,
             certification_level,
             production_certified: productionCertified,
             review_required: requiresReview,
