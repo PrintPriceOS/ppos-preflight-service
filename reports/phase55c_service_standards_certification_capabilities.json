@@ -1,0 +1,133 @@
+{
+  "scenarios": [
+    {
+      "name": "Capability Contract",
+      "status": "PASS"
+    },
+    {
+      "name": "PDFX_CLAIMED_BUT_NOT_VALIDATED",
+      "status": "PASS"
+    },
+    {
+      "name": "PDFX_MISSING_ONLY",
+      "status": "PASS"
+    },
+    {
+      "name": "INJECT_OUTPUT_INTENT_ONLY",
+      "status": "PASS"
+    },
+    {
+      "name": "UNSUPPORTED_CONVERT_TO_PDFX",
+      "status": "PASS"
+    },
+    {
+      "name": "VALIDATE_PDFX_UNAVAILABLE",
+      "status": "PASS"
+    },
+    {
+      "name": "job_cert_downgrade",
+      "status": "PASS"
+    },
+    {
+      "name": "FALSE_COMPLIANCE_CLAIM",
+      "status": "PASS"
+    },
+    {
+      "name": "FUTURE_VALID_EVIDENCE",
+      "status": "PASS"
+    }
+  ],
+  "passed": 9,
+  "failed": 0,
+  "matrix": {
+    "VALIDATE_PDFX": {
+      "fix_id": "VALIDATE_PDFX",
+      "label": "Validate PDF/X",
+      "category": "compliance",
+      "implemented": false,
+      "detectable": true,
+      "autofixable": false,
+      "risk_level": "MEDIUM",
+      "requires_human_review": true,
+      "production_safe": false,
+      "destructive": false,
+      "validator_required": true,
+      "validator_available": false,
+      "compliance_claim_allowed": false,
+      "standard_claimed": null,
+      "toolchain": [],
+      "supported_modes": [
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Validates PDF/X compliance.",
+      "operator_message": "PDF/X compliance check (Unsupported). Must not claim PDF/X compliance without real validator."
+    },
+    "CONVERT_TO_PDFX": {
+      "fix_id": "CONVERT_TO_PDFX",
+      "label": "Convert to PDF/X",
+      "category": "compliance",
+      "implemented": false,
+      "detectable": true,
+      "autofixable": false,
+      "risk_level": "HIGH",
+      "requires_human_review": true,
+      "production_safe": false,
+      "destructive": true,
+      "compliance_claim_allowed": false,
+      "standard_claimed": null,
+      "toolchain": [],
+      "supported_modes": [
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Converts to PDF/X standard.",
+      "operator_message": "PDF/X generation (Unsupported). Must not claim PDF/X."
+    },
+    "GENERATE_PDFX": {
+      "fix_id": "GENERATE_PDFX",
+      "label": "Generate PDF/X",
+      "category": "compliance",
+      "implemented": false,
+      "detectable": true,
+      "autofixable": false,
+      "risk_level": "HIGH",
+      "requires_human_review": true,
+      "production_safe": false,
+      "destructive": true,
+      "compliance_claim_allowed": false,
+      "standard_claimed": null,
+      "toolchain": [],
+      "supported_modes": [
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Converts to PDF/X standard.",
+      "operator_message": "PDF/X generation (Unsupported). Must not claim PDF/X."
+    },
+    "INJECT_OUTPUT_INTENT": {
+      "fix_id": "INJECT_OUTPUT_INTENT",
+      "label": "Inject Output Intent",
+      "category": "color",
+      "implemented": true,
+      "detectable": true,
+      "autofixable": true,
+      "risk_level": "LOW",
+      "requires_human_review": false,
+      "production_safe": true,
+      "destructive": false,
+      "outputintent_changed": true,
+      "outputintent_does_not_prove_pdfx": true,
+      "pdfx_compliance_claimed": false,
+      "standard_certified": false,
+      "compliance_claim_allowed": false,
+      "standard_claimed": null,
+      "toolchain": [
+        "pdf-lib"
+      ],
+      "supported_modes": [
+        "SAFE",
+        "REVIEW_REQUIRED"
+      ],
+      "customer_message": "Injects missing color profile output intent. OutputIntent injection alone does not prove PDF/X compliance.",
+      "operator_message": "Output intent profile injection. Safe only for passive metadata-only mode. OutputIntent injection alone does not prove PDF/X compliance."
+    }
+  }
+}

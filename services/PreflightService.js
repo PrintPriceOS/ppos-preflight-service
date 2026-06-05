@@ -1348,6 +1348,39 @@ class PreflightService {
             }
         }
 
+        const standardsGovSources = [
+            fixAuditData?.standards_certification_governance,
+            fixAuditData?.delta_report?.standards_certification_governance,
+            res.fix_summary?.standards_certification_governance,
+            deltaReportData?.standards_certification_governance,
+            res.delta_report?.standards_certification_governance,
+            res.delta_summary?.standards_certification_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let standardsGovActive = false;
+        let standardsCertPdfAllowed = true;
+        for (const src of standardsGovSources) {
+            if (src) {
+                if (src.review_required === true) standardsGovActive = true;
+                if (src.certified_pdf_allowed === false) standardsCertPdfAllowed = false;
+                if (src.production_certified === false) standardsGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) standardsGovActive = true;
+                if (src.review_required_standards_reasons && src.review_required_standards_reasons.length > 0) standardsGovActive = true;
+                if (src.validation_required === true && src.validation_performed === false) standardsGovActive = true;
+                if (src.standard_certified === false) standardsGovActive = true;
+            }
+        }
+
+        if (standardsGovActive || standardsCertPdfAllowed === false) {
+            productionCertified = false;
+            if (standardsGovActive) {
+                requiresReview = true;
+            }
+        }
+
         try {
             if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
@@ -1960,8 +1993,8 @@ class PreflightService {
             normalizedResult.requested_fixes = res.requested_fixes || [];
             normalizedResult.requestedFixesCount = normalizedResult.requested_fixes.length;
 
-            const pdfxUnsupported = skippedFixes.some(f => String(f.code || '').toUpperCase() === 'CONVERT_TO_PDFX_TRANSPARENCY_SAFE') ||
-                                    failedFixes.some(f => String(f.code || '').toUpperCase() === 'CONVERT_TO_PDFX_TRANSPARENCY_SAFE');
+            const pdfxUnsupported = skippedFixes.some(f => ['CONVERT_TO_PDFX_TRANSPARENCY_SAFE', 'CONVERT_TO_PDFX', 'GENERATE_PDFX'].includes(String(f.code || '').toUpperCase())) ||
+                                    failedFixes.some(f => ['CONVERT_TO_PDFX_TRANSPARENCY_SAFE', 'CONVERT_TO_PDFX', 'GENERATE_PDFX'].includes(String(f.code || '').toUpperCase()));
             if (pdfxUnsupported) {
                 normalizedResult.pdfx_compliance_claimed = false;
                 normalizedResult.pdfx_generation_performed = false;
@@ -1996,6 +2029,70 @@ class PreflightService {
                         normalizedResult.reviewReasons.push("One or more applied fixes require human review before production certification.");
                     }
                 }
+            }
+        }
+
+        // Standards Overclaim Protection
+        const standardsGov = res.standards_certification_governance || res.fix_summary?.standards_certification_governance || {};
+        
+        let validation_performed = res.validation_performed ?? standardsGov.validation_performed ?? false;
+        let validation_passed = res.validation_passed ?? standardsGov.validation_passed ?? false;
+        let compliance_claim_allowed = res.compliance_claim_allowed ?? standardsGov.compliance_claim_allowed ?? false;
+        
+        const hasValidEvidence = validation_performed && validation_passed && 
+                                 (res.validator_name || standardsGov.validator_name) && 
+                                 (res.validator_version || standardsGov.validator_version) &&
+                                 (res.standard_detected || standardsGov.standard_detected) &&
+                                 ((res.validation_report_available || standardsGov.validation_report_available) || 
+                                  (res.validation_report_hash || standardsGov.validation_report_hash) ||
+                                  (res.validation_report_path || standardsGov.validation_report_path));
+
+        const isClaimingCompliance = res.pdfx_compliance_claimed || res.pdfa_compliance_claimed || res.standard_certified || compliance_claim_allowed || res.standard_claimed || standardsGov.pdfx_compliance_claimed || standardsGov.standard_certified;
+
+        if (isClaimingCompliance && (!hasValidEvidence || !compliance_claim_allowed)) {
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.standard_certified = false;
+            normalizedResult.compliance_claim_allowed = false;
+            normalizedResult.standard_claimed = null;
+            normalizedResult.requiresHumanReview = true;
+            normalizedResult.productionCertified = false;
+            
+            normalizedResult.reviewReasons = normalizedResult.reviewReasons || [];
+            if (!normalizedResult.reviewReasons.includes('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE')) {
+                normalizedResult.reviewReasons.push('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE');
+            }
+            
+            if (normalizedResult.standards_certification_governance) {
+                normalizedResult.standards_certification_governance.pdfx_compliance_claimed = false;
+                normalizedResult.standards_certification_governance.pdfa_compliance_claimed = false;
+                normalizedResult.standards_certification_governance.standard_certified = false;
+                normalizedResult.standards_certification_governance.compliance_claim_allowed = false;
+                normalizedResult.standards_certification_governance.standard_claimed = null;
+                normalizedResult.standards_certification_governance.review_required = true;
+                
+                normalizedResult.standards_certification_governance.review_required_reasons = normalizedResult.standards_certification_governance.review_required_reasons || [];
+                if (!normalizedResult.standards_certification_governance.review_required_reasons.includes('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE')) {
+                    normalizedResult.standards_certification_governance.review_required_reasons.push('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE');
+                }
+            }
+        }
+
+        // Apply standards governance to root
+        let standardsGovActive = false;
+        let standardsCertPdfAllowed = true;
+        let standardsReviewRequired = false;
+        
+        if (standardsGov.review_required === true) standardsReviewRequired = true;
+        if (standardsGov.certified_pdf_allowed === false) standardsCertPdfAllowed = false;
+        if (standardsGov.production_certified === false) standardsGovActive = true;
+        if (standardsGov.review_required_reasons && standardsGov.review_required_reasons.length > 0) standardsReviewRequired = true;
+        if (standardsGov.review_required_standards_reasons && standardsGov.review_required_standards_reasons.length > 0) standardsReviewRequired = true;
+        
+        if (standardsGovActive || standardsCertPdfAllowed === false || standardsReviewRequired) {
+            normalizedResult.productionCertified = false;
+            if (standardsReviewRequired) {
+                normalizedResult.requiresHumanReview = true;
             }
         }
 
@@ -2141,6 +2238,11 @@ class PreflightService {
             certification_level,
             production_certified: productionCertified,
             review_required: requiresReview,
+            standard_certified: normalizedResult.standard_certified !== undefined ? normalizedResult.standard_certified : standardsGov.standard_certified,
+            pdfx_compliance_claimed: normalizedResult.pdfx_compliance_claimed !== undefined ? normalizedResult.pdfx_compliance_claimed : standardsGov.pdfx_compliance_claimed,
+            pdfa_compliance_claimed: normalizedResult.pdfa_compliance_claimed !== undefined ? normalizedResult.pdfa_compliance_claimed : standardsGov.pdfa_compliance_claimed,
+            compliance_claim_allowed: normalizedResult.compliance_claim_allowed !== undefined ? normalizedResult.compliance_claim_allowed : standardsGov.compliance_claim_allowed,
+            standards_certification_governance: normalizedResult.standards_certification_governance || standardsGov,
             policy_mode: res.policy_mode || 'SAFE',
             fix_summary: res.fix_summary || null,
             delta_summary: res.delta_summary || null

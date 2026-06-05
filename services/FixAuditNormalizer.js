@@ -36,7 +36,15 @@ class FixAuditNormalizer {
                         visually_sensitive: fix.visually_sensitive,
                         destructive: fix.destructive,
                         moved_from_applied_to_skipped: fix.moved_from_applied_to_skipped,
-                        moved_from_applied_to_review_reason: fix.moved_from_applied_to_review_reason
+                        moved_from_applied_to_review_reason: fix.moved_from_applied_to_review_reason,
+                        validator_required: fix.validator_required,
+                        validator_available: fix.validator_available,
+                        compliance_claim_allowed: fix.compliance_claim_allowed,
+                        standard_claimed: fix.standard_claimed,
+                        validation_performed: fix.validation_performed,
+                        validation_passed: fix.validation_passed,
+                        validator_name: fix.validator_name,
+                        validator_version: fix.validator_version
                     };
                 });
             };
@@ -102,11 +110,34 @@ class FixAuditNormalizer {
             if (auditData.image_object_damaged !== undefined) ret.image_object_damaged = auditData.image_object_damaged;
             if (auditData.image_rewrite_performed !== undefined) ret.image_rewrite_performed = auditData.image_rewrite_performed;
 
+            // Standards Certification Governance
+            if (auditData.standards_certification_governance) ret.standards_certification_governance = auditData.standards_certification_governance;
+            if (auditData.standard_certified !== undefined) ret.standard_certified = auditData.standard_certified;
+            if (auditData.pdfa_compliance_claimed !== undefined) ret.pdfa_compliance_claimed = auditData.pdfa_compliance_claimed;
+            if (auditData.compliance_claim_allowed !== undefined) ret.compliance_claim_allowed = auditData.compliance_claim_allowed;
+            if (auditData.validator_required !== undefined) ret.validator_required = auditData.validator_required;
+            if (auditData.validator_available !== undefined) ret.validator_available = auditData.validator_available;
+            if (auditData.validation_performed !== undefined) ret.validation_performed = auditData.validation_performed;
+            if (auditData.validation_passed !== undefined) ret.validation_passed = auditData.validation_passed;
+            if (auditData.validator_name !== undefined) ret.validator_name = auditData.validator_name;
+            if (auditData.validator_version !== undefined) ret.validator_version = auditData.validator_version;
+            if (auditData.validation_report_available !== undefined) ret.validation_report_available = auditData.validation_report_available;
+            if (auditData.validation_report_path !== undefined) ret.validation_report_path = auditData.validation_report_path;
+            if (auditData.validation_report_hash !== undefined) ret.validation_report_hash = auditData.validation_report_hash;
+            if (auditData.standard_claimed !== undefined) ret.standard_claimed = auditData.standard_claimed;
+            if (auditData.standard_detected !== undefined) ret.standard_detected = auditData.standard_detected;
+            if (auditData.standard_validation_report !== undefined) ret.standard_validation_report = auditData.standard_validation_report;
+            if (auditData.outputintent_only !== undefined) ret.outputintent_only = auditData.outputintent_only;
+            if (auditData.outputintent_does_not_prove_pdfx !== undefined) ret.outputintent_does_not_prove_pdfx = auditData.outputintent_does_not_prove_pdfx;
+            if (auditData.unsupported_standards_fixes !== undefined) ret.unsupported_standards_fixes = auditData.unsupported_standards_fixes;
+            if (auditData.standard_claim_without_validator_evidence !== undefined) ret.standard_claim_without_validator_evidence = auditData.standard_claim_without_validator_evidence;
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
                 if (auditData.delta_report.transparency_overprint_governance) ret.delta_report.transparency_overprint_governance = auditData.delta_report.transparency_overprint_governance;
                 if (auditData.delta_report.image_quality_governance) ret.delta_report.image_quality_governance = auditData.delta_report.image_quality_governance;
+                if (auditData.delta_report.standards_certification_governance) ret.delta_report.standards_certification_governance = auditData.delta_report.standards_certification_governance;
             }
 
             return ret;
