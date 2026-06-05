@@ -76,6 +76,13 @@ class FixAuditNormalizer {
             if (auditData.pdfx_compliance_claimed !== undefined) ret.pdfx_compliance_claimed = auditData.pdfx_compliance_claimed;
             if (auditData.pdfx_generation_performed !== undefined) ret.pdfx_generation_performed = auditData.pdfx_generation_performed;
 
+            // Preserve Engine/Worker Gaps and Inputs
+            if (auditData.detector_gap !== undefined) ret.detector_gap = auditData.detector_gap;
+            if (auditData.deferred !== undefined) ret.deferred = auditData.deferred;
+            if (auditData.fixture_gap !== undefined) ret.fixture_gap = auditData.fixture_gap;
+            if (auditData.input_mode !== undefined) ret.input_mode = auditData.input_mode;
+            if (auditData.engine_real_detection !== undefined) ret.engine_real_detection = auditData.engine_real_detection;
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
