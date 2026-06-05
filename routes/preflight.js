@@ -12,7 +12,7 @@ const requireScope = require('../src/middleware/requireScope');
 const IdentityValidator = require('../src/utils/identityValidator');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 const db = require('../src/services/db');
-const FixCapabilityContract = require('../src/services/FixCapabilityContract');
+const FixCapabilityContract = require('../services/FixCapabilityContract');
 
 const engineModule = require('@ppos/preflight-engine');
 const engineInstance = engineModule.createStandardEngine();

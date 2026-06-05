@@ -1,5 +1,5 @@
-const FixCapabilityContract = require('../src/services/FixCapabilityContract');
-const FixAuditNormalizer = require('../src/services/FixAuditNormalizer');
+const FixCapabilityContract = require('../services/FixCapabilityContract');
+const FixAuditNormalizer = require('../services/FixAuditNormalizer');
 
 async function runSmokeTests() {
     console.log("Running Phase 46 Smoke Tests: Service Fix Contract & Policy Governance");

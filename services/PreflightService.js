@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const IdentityValidator = require('../src/utils/identityValidator');
 const HashUtility = require('../src/utils/hashUtility');
-const FixAuditNormalizer = require('../src/services/FixAuditNormalizer');
+const FixAuditNormalizer = require('./FixAuditNormalizer');
 
 
 /**
