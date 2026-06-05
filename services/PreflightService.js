@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs-extra');
 const IdentityValidator = require('../src/utils/identityValidator');
 const HashUtility = require('../src/utils/hashUtility');
+const FixAuditNormalizer = require('../src/services/FixAuditNormalizer');
 
 
 /**
@@ -942,6 +943,59 @@ class PreflightService {
         }
 
         const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
+        
+        let dbHasUpdates = false;
+
+        if (job.job_type === 'AUTOFIX') {
+            const outputDir = this.storage.getJobSubfolder(auth.tenantId, canonicalId, 'output');
+            
+            // Read fix_audit.json if we don't have fix_summary or if we want to ensure it's normalized
+            if (!result.fix_summary) {
+                let fixAuditData = null;
+                try {
+                    const fixAuditPath = path.join(outputDir, 'fix_audit.json');
+                    if (await fs.pathExists(fixAuditPath)) {
+                        fixAuditData = await fs.readJson(fixAuditPath);
+                    }
+                } catch(e) {}
+                result.fix_summary = FixAuditNormalizer.normalize(fixAuditData);
+                dbHasUpdates = true;
+            }
+
+            // Read delta_report.json
+            if (!result.delta_summary) {
+                let deltaReportData = null;
+                try {
+                    const deltaPath = path.join(outputDir, 'delta_report.json');
+                    if (await fs.pathExists(deltaPath)) {
+                        deltaReportData = await fs.readJson(deltaPath);
+                    }
+                } catch(e) {}
+                
+                if (deltaReportData) {
+                    result.delta_summary = {
+                        available: true,
+                        changed: deltaReportData.changed || false,
+                        changes: deltaReportData.changes || [],
+                        operator_summary: deltaReportData.operator_summary || null,
+                        customer_safe_summary: deltaReportData.customer_safe_summary || null,
+                        requires_human_review: deltaReportData.requires_human_review || false,
+                        recommended_operator_action: deltaReportData.recommended_operator_action || null
+                    };
+                } else {
+                    result.delta_summary = { available: false };
+                }
+                dbHasUpdates = true;
+            }
+        }
+        
+        if (dbHasUpdates) {
+            await db.execute(
+                "UPDATE jobs SET result = ? WHERE id = ?",
+                [JSON.stringify(result), canonicalId],
+                { tenantId: auth.tenantId }
+            );
+        }
 
         // Phase 10: Timeout Detection for Polling
         if (job.status === 'FAILED' && (job.error === 'TIMEOUT' || result?.error === 'TIMEOUT')) {
@@ -1127,7 +1181,7 @@ class PreflightService {
                     }
 
                     const pushArtifact = (type) => {
-                        artifacts.push({
+                        const artifact = {
                             id: Buffer.from(`${jobId}:${type}:${file}`).toString('base64').replace(/=/g, ''),
                             jobId,
                             type,
@@ -1143,33 +1197,61 @@ class PreflightService {
                             ...(checksum_status ? { checksum_status } : {}),
                             ...(checksum_error ? { checksum_error } : {}),
                             downloadable: stats.size > 0,
-                            requires_review: (type === 'review_pdf') ? true : false,
+                            requires_review: false,
+                            production_certified: false,
+                            customer_visible: false,
+                            artifact_role: 'INTERMEDIATE_OUTPUT',
                             createdAt: stats.birthtime,
                             created_at: stats.birthtime,
                             status: 'READY'
-                        });
+                        };
+                        artifacts.push(artifact);
+                        return artifact;
                     };
 
+                    const blocked = ['FAILED', 'PARTIAL_ARTIFACTS', 'DEGRADED'].includes(status);
+                    
                     if (file === 'report.json') {
-                        pushArtifact('analysis_report');
-                        pushArtifact('report_json');
+                        const a1 = pushArtifact('analysis_report');
+                        const a2 = pushArtifact('report_json');
+                        a1.artifact_role = a2.artifact_role = 'TECHNICAL_REPORT';
                     } else if (file === 'fix_audit.json') {
-                        pushArtifact('fix_audit');
+                        const a1 = pushArtifact('fix_audit');
+                        a1.artifact_role = 'FORENSIC_AUDIT';
+                    } else if (file === 'delta_report.json') {
+                        const a1 = pushArtifact('delta_report');
+                        a1.artifact_role = 'TECHNICAL_REPORT';
                     } else if (file === 'certified.pdf') {
-                        pushArtifact('certified_pdf');
+                        const a1 = pushArtifact('certified_pdf');
+                        a1.artifact_role = 'PRODUCTION_READY';
+                        a1.customer_visible = true;
+                        a1.production_certified = productionCertified;
                     } else if (file === 'fixed.pdf') {
-                        pushArtifact('fixed_pdf');
-                        pushArtifact('final_fixed_pdf');
+                        const a1 = pushArtifact('fixed_pdf');
+                        const a2 = pushArtifact('final_fixed_pdf');
+                        a1.artifact_role = a2.artifact_role = requiresReview ? 'REVIEW_REQUIRED' : 'PRODUCTION_READY';
+                        a1.customer_visible = a2.customer_visible = !blocked;
                         if (requiresReview || (isAutofix && ['AUTOFIX_PARTIAL', 'COMPLETED_WITH_REVIEW'].includes(status))) {
-                            pushArtifact('review_pdf');
+                            const a3 = pushArtifact('review_pdf');
+                            a3.artifact_role = 'REVIEW_REQUIRED';
+                            a3.requires_review = true;
+                            a3.customer_visible = false;
                         }
                     } else if (file === 'normalized.pdf') {
-                        pushArtifact('normalized_pdf');
+                        const a1 = pushArtifact('normalized_pdf');
                         if (!files.includes('fixed.pdf')) {
-                            pushArtifact('final_fixed_pdf');
+                            const a2 = pushArtifact('final_fixed_pdf');
+                            a1.artifact_role = a2.artifact_role = requiresReview ? 'REVIEW_REQUIRED' : 'PRODUCTION_READY';
+                            a1.customer_visible = a2.customer_visible = !blocked;
                             if (requiresReview || (isAutofix && ['AUTOFIX_PARTIAL', 'COMPLETED_WITH_REVIEW'].includes(status))) {
-                                pushArtifact('review_pdf');
+                                const a3 = pushArtifact('review_pdf');
+                                a3.artifact_role = 'REVIEW_REQUIRED';
+                                a3.requires_review = true;
+                                a3.customer_visible = false;
                             }
+                        } else {
+                            a1.artifact_role = 'INTERMEDIATE_OUTPUT';
+                            a1.customer_visible = false;
                         }
                     } else if (file.endsWith('.png')) {
                         pushArtifact('page_preview');
@@ -1706,6 +1788,27 @@ class PreflightService {
 
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
+        let certification_level = 'UNKNOWN';
+        const isBlocked = finalJobStatus === 'FAILED' || finalJobStatus === 'PARTIAL_ARTIFACTS' || finalJobStatus === 'DEGRADED';
+        const hasFixedPdf = artifactList.some(a => (a.type === 'fixed_pdf' || a.type === 'final_fixed_pdf') && a.downloadable);
+        const hasReviewPdf = artifactList.some(a => a.type === 'review_pdf' && a.downloadable);
+        const hasCertifiedPdf = artifactList.some(a => a.type === 'certified_pdf' && a.downloadable);
+        const hasReport = artifactList.some(a => ['analysis_report', 'report_json'].includes(a.type) && a.downloadable);
+
+        if (finalJobStatus === 'PROCESSING' || finalJobStatus === 'QUEUED') {
+            certification_level = 'PROCESSING';
+        } else if (isBlocked) {
+            certification_level = 'BLOCKED';
+        } else if ((productionCertified && hasCertifiedPdf && !requiresReview) || (!isAutofixJob && hasCertifiedPdf && !isBlocked)) {
+            certification_level = 'CERTIFIED_READY';
+        } else if (requiresReview && (hasFixedPdf || hasReviewPdf)) {
+            certification_level = 'FIXED_REVIEW_REQUIRED';
+        } else if (hasFixedPdf && !requiresReview) {
+            certification_level = 'FIXED_READY';
+        } else if (hasReport && !hasFixedPdf && !hasCertifiedPdf) {
+            certification_level = 'ANALYSIS_ONLY';
+        }
+        
         if (isAutofixJob && returnedArtifacts && typeof returnedArtifacts === 'object' && !Array.isArray(returnedArtifacts)) {
              const hasFixed = returnedArtifacts.fixed_pdf || returnedArtifacts.final_fixed_pdf || artifactList.some(a => a.name === 'fixed.pdf');
              const hasNormalized = returnedArtifacts.normalized_pdf || artifactList.some(a => a.name === 'normalized.pdf');
@@ -1753,7 +1856,13 @@ class PreflightService {
             analysis_warnings,
             createdAt: job?.created_at || new Date().toISOString(),
             ...autofixRootLifts,
-            artifacts: returnedArtifacts
+            artifacts: returnedArtifacts,
+            certification_level,
+            production_certified: productionCertified,
+            review_required: requiresReview,
+            policy_mode: res.policy_mode || 'SAFE',
+            fix_summary: res.fix_summary || null,
+            delta_summary: res.delta_summary || null
         };
     }
 }

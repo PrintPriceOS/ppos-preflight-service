@@ -12,6 +12,7 @@ const requireScope = require('../src/middleware/requireScope');
 const IdentityValidator = require('../src/utils/identityValidator');
 const { ErrorCodes, ErrorTypes, PPOSError } = require('../src/utils/errors');
 const db = require('../src/services/db');
+const FixCapabilityContract = require('../src/services/FixCapabilityContract');
 
 const engineModule = require('@ppos/preflight-engine');
 const engineInstance = engineModule.createStandardEngine();
@@ -140,6 +141,13 @@ function resolveArtifactByAlias({ artifacts, artifactList, requestedKey, require
 
 async function preflightRoutes(fastify, options) {
     /**
+     * GET /api/preflight/capabilities
+     */
+    fastify.get('/capabilities', async (request, reply) => {
+        return FixCapabilityContract.getCapabilities();
+    });
+
+    /**
      * POST /api/preflight/jobs
      * Entry point for new analysis jobs.
      */
@@ -234,6 +242,7 @@ async function preflightRoutes(fastify, options) {
 
                 // Extract Fix Plan from Fields
                 const rawIssues = data.fields?.issues?.value ? JSON.parse(data.fields.issues.value) : null;
+                const policyMode = data.fields?.policy_mode?.value || 'SAFE';
 
                 // Derive repair type from issues when client doesn't specify explicitly
                 let derivedType = data.fields?.target?.value || null;
@@ -255,7 +264,8 @@ async function preflightRoutes(fastify, options) {
                     forceCmyk: data.fields?.forceCmyk?.value === '1',
                     flatten: data.fields?.flatten?.value === '1',
                     strictVector: data.fields?.strictVector?.value !== '0',
-                    issues: rawIssues
+                    issues: rawIssues,
+                    policy_mode: policyMode
                 };
 
                 // PERSIST INITIAL STATE
@@ -276,7 +286,8 @@ async function preflightRoutes(fastify, options) {
                             requested_fixes: rawIssues ? rawIssues.map(i => i.fix_method) : [],
                             fixes: [derivedType],
                             forceBleed: fixPlan.forceBleed,
-                            targetProfile: fixPlan.profile
+                            targetProfile: fixPlan.profile,
+                            policy_mode: policyMode
                         })
                     ],
                     { tenantId: auth.tenantId }
@@ -301,6 +312,7 @@ async function preflightRoutes(fastify, options) {
                     requested_fixes: rawIssues ? rawIssues.map(i => i.fix_method) : [],
                     forceBleed: fixPlan.forceBleed,
                     targetProfile: fixPlan.profile,
+                    policy_mode: policyMode,
                     autofix_attempted: true,
                     outcome_category: result.ok ? 'SUCCESS' : 'ENVIRONMENT_FAILURE',
                     analysis_status: result.ok ? 'COMPLETED' : 'FAILED',
@@ -327,6 +339,7 @@ async function preflightRoutes(fastify, options) {
                 // Async enqueue via JSON body
                 const body = request.body || {};
                 const policy = body.policy || body.policyId;
+                const policyMode = body.policy_mode || 'SAFE';
                 
                 const fixes = Array.isArray(body.fixes) ? body.fixes : (typeof body.fixes === 'string' ? [body.fixes] : undefined);
                 const requested_fixes = Array.isArray(body.requested_fixes) ? body.requested_fixes : (typeof body.requested_fixes === 'string' ? [body.requested_fixes] : fixes);
@@ -347,7 +360,8 @@ async function preflightRoutes(fastify, options) {
                     ...(requested_fixes ? { requested_fixes } : {}),
                     ...(body.forceBleed !== undefined ? { forceBleed: body.forceBleed } : {}),
                     ...(body.targetProfile ? { targetProfile: body.targetProfile } : {}),
-                    ...(body.magicFixProfile ? { magicFixProfile: body.magicFixProfile } : {})
+                    ...(body.magicFixProfile ? { magicFixProfile: body.magicFixProfile } : {}),
+                    policy_mode: policyMode
                 };
                 delete options.policy;
                 delete options.policyId;
@@ -437,6 +451,14 @@ async function preflightRoutes(fastify, options) {
                         downloadable_artifact_count,
                         zero_byte_artifact_count,
                         physical_artifacts_ready,
+                        certified_pdf_available: artifacts.some(a => a.type === 'certified_pdf' && a.downloadable),
+                        fixed_pdf_available: artifacts.some(a => (a.type === 'fixed_pdf' || a.type === 'final_fixed_pdf') && a.downloadable),
+                        review_pdf_available: artifacts.some(a => a.type === 'review_pdf' && a.downloadable),
+                        report_available: artifacts.some(a => ['analysis_report', 'report_json'].includes(a.type) && a.downloadable),
+                        fix_audit_available: artifacts.some(a => a.type === 'fix_audit' && a.downloadable),
+                        delta_report_available: artifacts.some(a => a.type === 'delta_report' && a.downloadable),
+                        production_ready_artifact_available: artifacts.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
+                        review_required_artifact_available: artifacts.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
                         ...(artifact_error ? { artifact_error } : {})
                     }
                 }
@@ -484,6 +506,21 @@ async function preflightRoutes(fastify, options) {
                 ok: true,
                 job_id: jobId,
                 artifacts: artifacts,
+                artifact_summary: {
+                    artifact_count,
+                    downloadable_artifact_count,
+                    zero_byte_artifact_count,
+                    physical_artifacts_ready,
+                    certified_pdf_available: artifacts.some(a => a.type === 'certified_pdf' && a.downloadable),
+                    fixed_pdf_available: artifacts.some(a => (a.type === 'fixed_pdf' || a.type === 'final_fixed_pdf') && a.downloadable),
+                    review_pdf_available: artifacts.some(a => a.type === 'review_pdf' && a.downloadable),
+                    report_available: artifacts.some(a => ['analysis_report', 'report_json'].includes(a.type) && a.downloadable),
+                    fix_audit_available: artifacts.some(a => a.type === 'fix_audit' && a.downloadable),
+                    delta_report_available: artifacts.some(a => a.type === 'delta_report' && a.downloadable),
+                    production_ready_artifact_available: artifacts.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
+                    review_required_artifact_available: artifacts.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
+                    ...(artifact_error ? { artifact_error } : {})
+                },
                 downloadable_artifact_count,
                 zero_byte_artifact_count,
                 physical_artifacts_ready,
