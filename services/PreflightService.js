@@ -1279,6 +1279,37 @@ class PreflightService {
             }
         }
 
+        const transparencyGovSources = [
+            fixAuditData?.transparency_overprint_governance,
+            fixAuditData?.delta_report?.transparency_overprint_governance,
+            res.fix_summary?.transparency_overprint_governance,
+            deltaReportData?.transparency_overprint_governance,
+            res.delta_report?.transparency_overprint_governance,
+            res.delta_summary?.transparency_overprint_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let transparencyGovActive = false;
+        let transparencyCertPdfAllowed = true;
+        for (const src of transparencyGovSources) {
+            if (src) {
+                if (src.review_required === true) transparencyGovActive = true;
+                if (src.certified_pdf_allowed === false) transparencyCertPdfAllowed = false;
+                if (src.production_certified === false) transparencyGovActive = true;
+                if (src.visual_rewrite_fix_applied === true) transparencyGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) transparencyGovActive = true;
+            }
+        }
+
+        if (transparencyGovActive || transparencyCertPdfAllowed === false) {
+            productionCertified = false;
+            if (transparencyGovActive) {
+                requiresReview = true;
+            }
+        }
+
         try {
             if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
@@ -1890,6 +1921,17 @@ class PreflightService {
             normalizedResult.repairsCount = allRepairs.length;
             normalizedResult.requested_fixes = res.requested_fixes || [];
             normalizedResult.requestedFixesCount = normalizedResult.requested_fixes.length;
+
+            const pdfxUnsupported = skippedFixes.some(f => String(f.code || '').toUpperCase() === 'CONVERT_TO_PDFX_TRANSPARENCY_SAFE') ||
+                                    failedFixes.some(f => String(f.code || '').toUpperCase() === 'CONVERT_TO_PDFX_TRANSPARENCY_SAFE');
+            if (pdfxUnsupported) {
+                normalizedResult.pdfx_compliance_claimed = false;
+                normalizedResult.pdfx_generation_performed = false;
+                if (normalizedResult.transparency_overprint_governance) {
+                    normalizedResult.transparency_overprint_governance.pdfx_compliance_claimed = false;
+                    normalizedResult.transparency_overprint_governance.pdfx_generation_performed = false;
+                }
+            }
 
             const coverageFindings = sourceFindings.length > 0
                 ? sourceFindings
