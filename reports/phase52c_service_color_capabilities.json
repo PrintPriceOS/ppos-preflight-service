@@ -1,0 +1,75 @@
+{
+  "phase": "52C",
+  "component": "Service Color Capability Exposure",
+  "status": "PASS",
+  "capability_exposure_matrix": {
+    "CONVERT_CMYK": {
+      "implemented": true,
+      "autofixable": true,
+      "production_safe": false,
+      "requires_human_review": true,
+      "risk_level": "HIGH",
+      "destructive": true,
+      "visually_sensitive": true,
+      "supported_modes": ["REVIEW_REQUIRED", "EXPERIMENTAL"]
+    },
+    "INJECT_OUTPUT_INTENT": {
+      "implemented": true,
+      "autofixable": true,
+      "production_safe": true,
+      "requires_human_review": false,
+      "risk_level": "LOW",
+      "destructive": false,
+      "supported_modes": ["SAFE", "REVIEW_REQUIRED"]
+    },
+    "NORMALIZE_ICC_PROFILE": {
+      "implemented": false,
+      "autofixable": false,
+      "production_safe": false,
+      "requires_human_review": true,
+      "risk_level": "HIGH",
+      "destructive": true,
+      "visually_sensitive": true,
+      "supported_modes": ["EXPERIMENTAL"]
+    },
+    "REDUCE_TAC": {
+      "implemented": false,
+      "autofixable": false,
+      "production_safe": false,
+      "requires_human_review": true,
+      "risk_level": "HIGH",
+      "destructive": true,
+      "visually_sensitive": true,
+      "supported_modes": ["EXPERIMENTAL"]
+    },
+    "MAP_RICH_BLACK_TEXT_TO_K_ONLY": {
+      "implemented": false,
+      "autofixable": false,
+      "production_safe": false,
+      "requires_human_review": true,
+      "risk_level": "HIGH",
+      "destructive": true,
+      "visually_sensitive": true,
+      "supported_modes": ["EXPERIMENTAL"]
+    },
+    "MAP_REGISTRATION_COLOR_TO_BLACK": {
+      "implemented": false,
+      "autofixable": false,
+      "production_safe": false,
+      "requires_human_review": true,
+      "risk_level": "HIGH",
+      "destructive": true,
+      "visually_sensitive": true,
+      "supported_modes": ["EXPERIMENTAL"]
+    }
+  },
+  "normalization_scenarios": {
+    "CONVERT_CMYK_applied": "Preserves color_governance block, enforces production_certified=false.",
+    "INJECT_OUTPUT_INTENT_only": "Maintains production_certified if no other destructive/color issues are present.",
+    "unsupported_fixes": "Persisted in skipped_fixes and color_governance.unsupported_color_fixes."
+  },
+  "artifact_downgrade_scenarios": {
+    "certified_pdf_not_allowed": "certified.pdf generated but downgraded to REVIEW_REQUIRED and customer_visible=false."
+  },
+  "notes": "Color governance pipeline is now synchronized from Engine to Worker to Service, faithfully honoring destructive visual changes."
+}

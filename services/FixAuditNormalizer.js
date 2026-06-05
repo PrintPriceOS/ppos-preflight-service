@@ -21,7 +21,7 @@ class FixAuditNormalizer {
 
         // v2 handling
         if (auditData.version === "2.0") {
-            return {
+            const ret = {
                 available: true,
                 version: "2.0",
                 requested_count: auditData.requested_fixes ? auditData.requested_fixes.length : 0,
@@ -37,6 +37,24 @@ class FixAuditNormalizer {
                 failed_fixes: auditData.failed_fixes || [],
                 fix_results: auditData.fix_results || []
             };
+
+            if (auditData.color_governance) {
+                ret.color_governance = auditData.color_governance;
+            }
+            if (auditData.highest_color_risk) ret.highest_color_risk = auditData.highest_color_risk;
+            if (auditData.destructive_color_fix_applied !== undefined) ret.destructive_color_fix_applied = auditData.destructive_color_fix_applied;
+            if (auditData.unsupported_color_fixes) ret.unsupported_color_fixes = auditData.unsupported_color_fixes;
+            if (auditData.review_required_color_reasons) ret.review_required_color_reasons = auditData.review_required_color_reasons;
+            if (auditData.color_changed !== undefined) ret.color_changed = auditData.color_changed;
+            if (auditData.output_intent_changed !== undefined) ret.output_intent_changed = auditData.output_intent_changed;
+            if (auditData.color_conversion_applied !== undefined) ret.color_conversion_applied = auditData.color_conversion_applied;
+            if (auditData.certified_pdf_allowed !== undefined) ret.certified_pdf_allowed = auditData.certified_pdf_allowed;
+            if (auditData.delta_report && auditData.delta_report.color_governance) {
+                ret.delta_report = ret.delta_report || {};
+                ret.delta_report.color_governance = auditData.delta_report.color_governance;
+            }
+
+            return ret;
         }
 
         // Legacy handling (best-effort)

@@ -1240,6 +1240,45 @@ class PreflightService {
             }
         }
 
+        let deltaReportData = null;
+        if (outputDir) {
+            try {
+                const deltaPath = path.join(outputDir, 'delta_report.json');
+                if (await fs.pathExists(deltaPath)) {
+                    deltaReportData = await fs.readJson(deltaPath);
+                }
+            } catch(e) {}
+        }
+
+        const colorGovSources = [
+            fixAuditData?.color_governance,
+            fixAuditData?.delta_report?.color_governance,
+            res.fix_summary?.color_governance,
+            deltaReportData?.color_governance,
+            res.delta_report?.color_governance,
+            res.delta_summary?.color_governance,
+            fixAuditData,
+            deltaReportData
+        ];
+
+        let colorGovActive = false;
+        let colorCertPdfAllowed = true;
+        for (const src of colorGovSources) {
+            if (src) {
+                if (src.destructive_color_fix_applied === true) colorGovActive = true;
+                if (src.review_required_color_reasons && src.review_required_color_reasons.length > 0) colorGovActive = true;
+                if (src.certified_pdf_allowed === false) colorCertPdfAllowed = false;
+                if (src.production_certified === false) colorGovActive = true;
+            }
+        }
+
+        if (colorGovActive || colorCertPdfAllowed === false) {
+            productionCertified = false;
+            if (colorGovActive) {
+                requiresReview = true;
+            }
+        }
+
         try {
             if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
