@@ -105,14 +105,14 @@ async function runSmokeTests() {
         const jobId = 'fix_test';
         const tenantId = 'ppos-production';
 
-        const artifacts = await service.getJobArtifacts(jobId, tenantId);
+        const artifactsPayload = await service.getJobArtifacts(jobId, tenantId);
+        const artifacts = artifactsPayload?.artifacts || artifactsPayload || [];
         
         assertTrue("getJobArtifacts returns >= 4 artifacts", artifacts.length >= 4);
         
         const fixedPdf = artifacts.find(a => a.type === 'fixed_pdf');
         assertTrue("fixed_pdf found", !!fixedPdf);
         assertTrue("fixed_pdf downloadable", fixedPdf.downloadable);
-        // Wait, requires_review is false for fixed_pdf directly on the object? 
         // No, fixed_pdf might not have requires_review true natively on the physical artifact list, but wait, the plan said:
         // fixed_pdf.requires_review = true? Actually in my implementation requires_review is only strictly for review_pdf?
         // Wait, artifact mapping: I didn't set requires_review on fixed_pdf artifact directly, only artifact_role = REVIEW_REQUIRED.
