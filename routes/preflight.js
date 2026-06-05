@@ -139,6 +139,17 @@ function resolveArtifactByAlias({ artifacts, artifactList, requestedKey, require
     return null;
 }
 
+function resolveTenantId(request, auth) {
+    const tenantId = request.headers['x-tenant-id'] || 
+                     request.headers['X-Tenant-ID'] || 
+                     auth?.tenantId || 
+                     auth?.tenant_id || 
+                     request.user?.tenant_id || 
+                     request.user?.tenantId || 
+                     "ppos-production";
+    return tenantId;
+}
+
 async function preflightRoutes(fastify, options) {
     /**
      * GET /api/preflight/capabilities
@@ -412,6 +423,19 @@ async function preflightRoutes(fastify, options) {
         IdentityValidator.validate(jobId, 'JobFetch');
 
         try {
+            const tenantId = resolveTenantId(request, request.context?.auth);
+            
+            console.log(`[PREFLIGHT-SERVICE][TENANT_RESOLVED]`, {
+                jobId,
+                tenantId,
+                source: "GET /jobs/:id"
+            });
+
+            // Patch context if needed
+            if (request.context?.auth) {
+                request.context.auth.tenantId = tenantId;
+            }
+
             const jobStatus = await service.getJobStatus(jobId, request.context);
 
             if (!jobStatus) {
@@ -423,7 +447,17 @@ async function preflightRoutes(fastify, options) {
             }
 
             // Phase 42B: Attach artifacts and artifact_summary
-            const artifacts = await service.getJobArtifacts(jobId, request.context.auth.tenantId);
+            const artifactsPayload = await service.getJobArtifacts(jobId, tenantId);
+            
+            let artifacts = [];
+            let artifact_summary = {};
+            if (artifactsPayload && artifactsPayload.artifacts) {
+                artifacts = artifactsPayload.artifacts;
+                artifact_summary = artifactsPayload.artifact_summary || {};
+            } else if (Array.isArray(artifactsPayload)) {
+                artifacts = artifactsPayload;
+            }
+
             const artifact_count = artifacts.length;
             const downloadable_artifact_count = artifacts.filter(a => a.downloadable).length;
             const zero_byte_artifact_count = artifacts.filter(a => !a.downloadable).length;
@@ -459,10 +493,15 @@ async function preflightRoutes(fastify, options) {
                         delta_report_available: artifacts.some(a => a.type === 'delta_report' && a.downloadable),
                         production_ready_artifact_available: artifacts.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
                         review_required_artifact_available: artifacts.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
-                        ...(artifact_error ? { artifact_error } : {})
+                        ...(artifact_error ? { artifact_error } : {}),
+                        ...artifact_summary
                     }
                 }
             };
+            
+            if (!response.job.id && jobStatus.id) {
+                response.job.id = jobStatus.id;
+            }
 
             return response;
         } catch (err) {
@@ -480,7 +519,29 @@ async function preflightRoutes(fastify, options) {
         IdentityValidator.validate(jobId, 'ArtifactList');
 
         try {
-            const artifacts = await service.getJobArtifacts(jobId, request.context.auth.tenantId);
+            const tenantId = resolveTenantId(request, request.context?.auth);
+
+            console.log(`[PREFLIGHT-SERVICE][TENANT_RESOLVED]`, {
+                jobId,
+                tenantId,
+                source: "GET /jobs/:id/artifacts"
+            });
+
+            const result = await service.getJobArtifacts(jobId, tenantId);
+
+            if (result && result.artifacts) {
+                console.log(`[PREFLIGHT-SERVICE][ARTIFACT_RESPONSE_READY]`, {
+                    jobId,
+                    tenantId,
+                    artifactCount: result.artifacts.length,
+                    physicalArtifactsReady: result.artifact_summary?.physical_artifacts_ready || false,
+                    sourceStatus: result.source_status
+                });
+                return reply.send(result);
+            }
+
+            // Fallback if returned an array (legacy behavior)
+            const artifacts = Array.isArray(result) ? result : [];
             const jobStatus = await service.getJobStatus(jobId, request.context);
 
             const artifact_count = artifacts.length;
@@ -501,6 +562,14 @@ async function preflightRoutes(fastify, options) {
                     message = "No fixed PDF bytes were produced for this job.";
                 }
             }
+
+            console.log(`[PREFLIGHT-SERVICE][ARTIFACT_RESPONSE_READY]`, {
+                jobId,
+                tenantId,
+                artifactCount: artifact_count,
+                physicalArtifactsReady: physical_artifacts_ready,
+                sourceStatus: "DB_OR_LEGACY"
+            });
 
             return {
                 ok: true,
@@ -545,8 +614,23 @@ async function preflightRoutes(fastify, options) {
         const { auth } = request.context;
 
         try {
+            const tenantId = resolveTenantId(request, auth);
+
+            console.log(`[PREFLIGHT-SERVICE][TENANT_RESOLVED]`, {
+                jobId,
+                tenantId,
+                source: "GET /jobs/:id/artifacts/:artifactId"
+            });
+
             // Get all known artifacts for the job
-            const artifacts = await service.getJobArtifacts(jobId, auth.tenantId);
+            const artifactsPayload = await service.getJobArtifacts(jobId, tenantId, { forcePhysical: false });
+            const artifacts = artifactsPayload?.artifacts || artifactsPayload || [];
+            
+            // Patch context
+            if (request.context?.auth) {
+                request.context.auth.tenantId = tenantId;
+            }
+            
             const jobStatus = await service.getJobStatus(jobId, request.context);
 
             const requiresReview = jobStatus?.result?.requires_human_review === true || jobStatus?.result?.requiresHumanReview === true || jobStatus?.result?.summary?.after?.requires_human_review === true || jobStatus?.status === 'COMPLETED_WITH_REVIEW' || jobStatus?.status === 'AUTOFIX_PARTIAL';
@@ -585,7 +669,7 @@ async function preflightRoutes(fastify, options) {
             let finalPath = null;
 
             for (const sub of subfolders) {
-                const potential = path.join(storage.getJobSubfolder(auth.tenantId, jobId, sub), targetFileName);
+                const potential = path.join(storage.getJobSubfolder(tenantId, jobId, sub), targetFileName);
                 if (await fs.pathExists(potential)) {
                     finalPath = potential;
                     break;
@@ -601,7 +685,7 @@ async function preflightRoutes(fastify, options) {
             }
             
             // Phase 10: isolation breach verification
-            storage.verifyPathIsolation(auth.tenantId, finalPath);
+            storage.verifyPathIsolation(tenantId, finalPath);
 
             const stats = await fs.stat(finalPath);
             if (stats.size === 0) {

@@ -968,7 +968,9 @@ class PreflightService {
             try { result = JSON.parse(result); } catch (e) { }
         }
 
-        const artifacts = await this.getJobArtifacts(canonicalId, auth.tenantId);
+        const artifactsPayload = await this.getJobArtifacts(canonicalId, auth.tenantId);
+        const artifactList = artifactsPayload?.artifacts || artifactsPayload || [];
+        const artifacts = Array.isArray(artifactList) ? artifactList : [];
         
         // Determine hydration source_status
         if (!isSynthetic && physicalOutputDir && (!artifacts.length || !result.fix_summary || !result.fix_summary.available)) {
@@ -1380,6 +1382,35 @@ class PreflightService {
             }
         } catch (err) {
             console.error(`[ARTIFACT-DISCOVERY-ERROR] jobId=${jobId}:`, err.message);
+        }
+
+        if (artifacts.length > 0) {
+            const artifactListArray = artifacts;
+            const artifact_summary = {
+                artifact_count: artifactListArray.length,
+                downloadable_artifact_count: artifactListArray.filter(a => a.downloadable).length,
+                zero_byte_artifact_count: artifactListArray.filter(a => !a.downloadable && a.size === 0).length,
+                physical_artifacts_ready: artifactListArray.length > 0,
+                certified_pdf_available: artifactListArray.some(a => a.type === 'certified_pdf' && a.downloadable),
+                fixed_pdf_available: artifactListArray.some(a => (a.type === 'fixed_pdf' || a.type === 'final_fixed_pdf') && a.downloadable),
+                review_pdf_available: artifactListArray.some(a => a.type === 'review_pdf' && a.downloadable),
+                report_available: artifactListArray.some(a => ['analysis_report', 'report_json'].includes(a.type) && a.downloadable),
+                fix_audit_available: artifactListArray.some(a => a.type === 'fix_audit' && a.downloadable),
+                delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
+                production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
+                review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable)
+            };
+
+            return {
+                ok: true,
+                job_id: jobId,
+                artifacts: artifactListArray,
+                artifact_summary: artifact_summary,
+                downloadable_artifact_count: artifact_summary.downloadable_artifact_count,
+                zero_byte_artifact_count: artifact_summary.zero_byte_artifact_count,
+                physical_artifacts_ready: artifact_summary.physical_artifacts_ready,
+                source_status: "PHYSICAL_OUTPUT_FALLBACK"
+            };
         }
 
         return artifacts;
