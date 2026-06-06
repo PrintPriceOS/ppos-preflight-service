@@ -1,0 +1,60 @@
+{
+  "summary": "Phase 55E.3 Service Standards Hydration Report",
+  "all_passed": true,
+  "results": [
+    {
+      "scenario": "1. Worker output with validator gap",
+      "input_mode": "SYNTHETIC_POLICY_FALLBACK",
+      "detector_gap": true,
+      "fixture_gap": false,
+      "validator_gap": true,
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "2. OutputIntent only",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "3. Unsupported VALIDATE_PDFX / CONVERT_TO_PDFX",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "4. PDFX_CLAIMED_BUT_NOT_VALIDATED",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "5. certified.pdf filename/role without validator evidence",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "6. False compliance claim without validator evidence",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "7. Future valid validator evidence",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "pass": true,
+      "notes": "Preserved honestly"
+    },
+    {
+      "scenario": "8. Detector gap / fixture gap / deferred",
+      "input_mode": "REAL_ENGINE_OUTPUT",
+      "detector_gap": true,
+      "fixture_gap": true,
+      "deferred": true,
+      "pass": true,
+      "notes": "Preserved honestly"
+    }
+  ]
+}

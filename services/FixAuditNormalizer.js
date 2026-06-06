@@ -93,6 +93,7 @@ class FixAuditNormalizer {
             if (auditData.detector_gap !== undefined) ret.detector_gap = auditData.detector_gap;
             if (auditData.deferred !== undefined) ret.deferred = auditData.deferred;
             if (auditData.fixture_gap !== undefined) ret.fixture_gap = auditData.fixture_gap;
+            if (auditData.validator_gap !== undefined) ret.validator_gap = auditData.validator_gap;
             if (auditData.input_mode !== undefined) ret.input_mode = auditData.input_mode;
             if (auditData.engine_real_detection !== undefined) ret.engine_real_detection = auditData.engine_real_detection;
 
