@@ -133,12 +133,18 @@ class FixAuditNormalizer {
             if (auditData.unsupported_standards_fixes !== undefined) ret.unsupported_standards_fixes = auditData.unsupported_standards_fixes;
             if (auditData.standard_claim_without_validator_evidence !== undefined) ret.standard_claim_without_validator_evidence = auditData.standard_claim_without_validator_evidence;
 
+            // Artifact Trust Governance (Phase 56)
+            if (auditData.artifact_trust) {
+                ret.artifact_trust = auditData.artifact_trust; // Preserve as is, including nested fields
+            }
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
                 if (auditData.delta_report.transparency_overprint_governance) ret.delta_report.transparency_overprint_governance = auditData.delta_report.transparency_overprint_governance;
                 if (auditData.delta_report.image_quality_governance) ret.delta_report.image_quality_governance = auditData.delta_report.image_quality_governance;
                 if (auditData.delta_report.standards_certification_governance) ret.delta_report.standards_certification_governance = auditData.delta_report.standards_certification_governance;
+                if (auditData.delta_report.artifact_trust) ret.delta_report.artifact_trust = auditData.delta_report.artifact_trust;
             }
 
             return ret;

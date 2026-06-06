@@ -1381,6 +1381,37 @@ class PreflightService {
             }
         }
 
+        const artifactTrustSources = [
+            fixAuditData?.artifact_trust,
+            fixAuditData?.delta_report?.artifact_trust,
+            res.fix_summary?.artifact_trust,
+            deltaReportData?.artifact_trust,
+            res.delta_report?.artifact_trust,
+            res.delta_summary?.artifact_trust,
+            res.artifact_trust
+        ];
+
+        let resolvedArtifactTrust = null;
+        for (const src of artifactTrustSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedArtifactTrust = src;
+                break;
+            }
+        }
+
+        if (resolvedArtifactTrust) {
+            if (resolvedArtifactTrust.production_certified === false) {
+                productionCertified = false;
+            } else if (resolvedArtifactTrust.production_certified === true) {
+                productionCertified = true;
+            }
+            if (resolvedArtifactTrust.review_required === true) {
+                requiresReview = true;
+            } else if (resolvedArtifactTrust.review_required === false) {
+                requiresReview = false;
+            }
+        }
+
         try {
             if (outputDir && await fs.pathExists(outputDir)) {
                 const files = await fs.readdir(outputDir);
@@ -1463,10 +1494,12 @@ class PreflightService {
                     } else if (file === 'certified.pdf') {
                         const a1 = pushArtifact('certified_pdf');
                         const isCertPolicyTrue = artifactPolicy.certified_pdf !== false;
-                        if (productionCertified && isCertPolicyTrue && !requiresReview) {
+                        const trustAllowed = resolvedArtifactTrust ? resolvedArtifactTrust.certified_pdf_allowed !== false : true;
+                        
+                        if (productionCertified && isCertPolicyTrue && !requiresReview && trustAllowed) {
                             a1.artifact_role = 'PRODUCTION_READY';
-                            a1.customer_visible = true;
-                            a1.production_certified = true;
+                            a1.customer_visible = resolvedArtifactTrust ? (resolvedArtifactTrust.customer_visible === true) : true;
+                            a1.production_certified = resolvedArtifactTrust ? (resolvedArtifactTrust.production_certified === true) : true;
                             a1.recommended_use = "Use as certified production artifact";
                         } else {
                             a1.artifact_role = 'REVIEW_REQUIRED';
@@ -1523,6 +1556,14 @@ class PreflightService {
             }
         } catch (err) {
             console.error(`[ARTIFACT-DISCOVERY-ERROR] jobId=${jobId}:`, err.message);
+        }
+
+        const primaryType = resolvedArtifactTrust && resolvedArtifactTrust.primary_artifact_type 
+            ? resolvedArtifactTrust.primary_artifact_type 
+            : (res?.primary_artifact_type || 'certified_pdf');
+            
+        for (const a of artifacts) {
+            a.is_primary = (a.type === primaryType);
         }
 
         if (artifacts.length > 0) {
@@ -2032,22 +2073,26 @@ class PreflightService {
             }
         }
 
-        // Standards Overclaim Protection
-        const standardsGov = res.standards_certification_governance || res.fix_summary?.standards_certification_governance || {};
+        // Standards Overclaim Protection & Artifact Trust Override
+        const standardsGov = res?.standards_certification_governance || res?.fix_summary?.standards_certification_governance || {};
+        const rootArtifactTrust = res?.artifact_trust || res?.fix_summary?.artifact_trust || {};
         
-        let validation_performed = res.validation_performed ?? standardsGov.validation_performed ?? false;
-        let validation_passed = res.validation_passed ?? standardsGov.validation_passed ?? false;
-        let compliance_claim_allowed = res.compliance_claim_allowed ?? standardsGov.compliance_claim_allowed ?? false;
+        // Extract evidence fields considering artifact_trust.evidence
+        const evidenceSrc = rootArtifactTrust.evidence || {};
+        
+        let validation_performed = evidenceSrc.validation_performed ?? res.validation_performed ?? standardsGov.validation_performed ?? false;
+        let validation_passed = evidenceSrc.validation_passed ?? res.validation_passed ?? standardsGov.validation_passed ?? false;
+        let compliance_claim_allowed = evidenceSrc.compliance_claim_allowed ?? rootArtifactTrust.compliance_claim_allowed ?? res.compliance_claim_allowed ?? standardsGov.compliance_claim_allowed ?? false;
         
         const hasValidEvidence = validation_performed && validation_passed && 
-                                 (res.validator_name || standardsGov.validator_name) && 
-                                 (res.validator_version || standardsGov.validator_version) &&
-                                 (res.standard_detected || standardsGov.standard_detected) &&
-                                 ((res.validation_report_available || standardsGov.validation_report_available) || 
-                                  (res.validation_report_hash || standardsGov.validation_report_hash) ||
-                                  (res.validation_report_path || standardsGov.validation_report_path));
+                                 (evidenceSrc.validator_name || res.validator_name || standardsGov.validator_name) && 
+                                 (evidenceSrc.validator_version || res.validator_version || standardsGov.validator_version) &&
+                                 (evidenceSrc.standard_detected || res.standard_detected || standardsGov.standard_detected) &&
+                                 ((evidenceSrc.validation_report_available || res.validation_report_available || standardsGov.validation_report_available) || 
+                                  (evidenceSrc.validation_report_hash || res.validation_report_hash || standardsGov.validation_report_hash) ||
+                                  (evidenceSrc.validation_report_path || res.validation_report_path || standardsGov.validation_report_path));
 
-        const isClaimingCompliance = res.pdfx_compliance_claimed || res.pdfa_compliance_claimed || res.standard_certified || compliance_claim_allowed || res.standard_claimed || standardsGov.pdfx_compliance_claimed || standardsGov.standard_certified;
+        const isClaimingCompliance = rootArtifactTrust.standard_certified || rootArtifactTrust.pdfx_compliance_claimed || res.pdfx_compliance_claimed || res.pdfa_compliance_claimed || res.standard_certified || compliance_claim_allowed || res.standard_claimed || standardsGov.pdfx_compliance_claimed || standardsGov.standard_certified;
 
         if (isClaimingCompliance && (!hasValidEvidence || !compliance_claim_allowed)) {
             normalizedResult.pdfx_compliance_claimed = false;
@@ -2058,9 +2103,21 @@ class PreflightService {
             normalizedResult.requiresHumanReview = true;
             normalizedResult.productionCertified = false;
             
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+            
             normalizedResult.reviewReasons = normalizedResult.reviewReasons || [];
             if (!normalizedResult.reviewReasons.includes('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE')) {
                 normalizedResult.reviewReasons.push('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE');
+            }
+            
+            if (!normalizedResult.warnings) normalizedResult.warnings = [];
+            if (!normalizedResult.warnings.includes('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE')) {
+                normalizedResult.warnings.push('STANDARD_CLAIM_WITHOUT_VALIDATOR_EVIDENCE');
             }
             
             if (normalizedResult.standards_certification_governance) {
@@ -2144,8 +2201,8 @@ class PreflightService {
             ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
         };
 
-        const productionCertified = normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false);
-        const requiresReview = normalizedResult.requiresHumanReview !== undefined ? normalizedResult.requiresHumanReview : (res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL");
+        const productionCertified = rootArtifactTrust.production_certified !== undefined ? rootArtifactTrust.production_certified : (normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false));
+        const requiresReview = rootArtifactTrust.review_required !== undefined ? rootArtifactTrust.review_required : (normalizedResult.requiresHumanReview !== undefined ? normalizedResult.requiresHumanReview : (res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL"));
 
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
@@ -2212,7 +2269,8 @@ class PreflightService {
             fix_audit_available: artifactListArray.some(a => a.type === 'fix_audit' && a.downloadable),
             delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
             production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
-            review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable)
+            review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
+            artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined
         };
 
         return {
@@ -2238,14 +2296,19 @@ class PreflightService {
             certification_level,
             production_certified: productionCertified,
             review_required: requiresReview,
-            standard_certified: normalizedResult.standard_certified !== undefined ? normalizedResult.standard_certified : standardsGov.standard_certified,
-            pdfx_compliance_claimed: normalizedResult.pdfx_compliance_claimed !== undefined ? normalizedResult.pdfx_compliance_claimed : standardsGov.pdfx_compliance_claimed,
-            pdfa_compliance_claimed: normalizedResult.pdfa_compliance_claimed !== undefined ? normalizedResult.pdfa_compliance_claimed : standardsGov.pdfa_compliance_claimed,
-            compliance_claim_allowed: normalizedResult.compliance_claim_allowed !== undefined ? normalizedResult.compliance_claim_allowed : standardsGov.compliance_claim_allowed,
+            standard_certified: rootArtifactTrust.standard_certified !== undefined ? rootArtifactTrust.standard_certified : (normalizedResult.standard_certified !== undefined ? normalizedResult.standard_certified : standardsGov.standard_certified),
+            pdfx_compliance_claimed: rootArtifactTrust.pdfx_compliance_claimed !== undefined ? rootArtifactTrust.pdfx_compliance_claimed : (normalizedResult.pdfx_compliance_claimed !== undefined ? normalizedResult.pdfx_compliance_claimed : standardsGov.pdfx_compliance_claimed),
+            pdfa_compliance_claimed: rootArtifactTrust.pdfa_compliance_claimed !== undefined ? rootArtifactTrust.pdfa_compliance_claimed : (normalizedResult.pdfa_compliance_claimed !== undefined ? normalizedResult.pdfa_compliance_claimed : standardsGov.pdfa_compliance_claimed),
+            compliance_claim_allowed: rootArtifactTrust.compliance_claim_allowed !== undefined ? rootArtifactTrust.compliance_claim_allowed : (normalizedResult.compliance_claim_allowed !== undefined ? normalizedResult.compliance_claim_allowed : standardsGov.compliance_claim_allowed),
             standards_certification_governance: normalizedResult.standards_certification_governance || standardsGov,
             policy_mode: res.policy_mode || 'SAFE',
             fix_summary: res.fix_summary || null,
-            delta_summary: res.delta_summary || null
+            delta_summary: res.delta_summary || null,
+            artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
+            primary_artifact_type: rootArtifactTrust.primary_artifact_type || res.primary_artifact_type || undefined,
+            customer_visible: rootArtifactTrust.customer_visible !== undefined ? rootArtifactTrust.customer_visible : undefined,
+            blocked_by_governance_domains: rootArtifactTrust.blocked_by_governance_domains || [],
+            certification_labels: rootArtifactTrust.certification_labels || []
         };
     }
 }
