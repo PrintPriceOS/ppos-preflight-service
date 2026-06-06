@@ -981,7 +981,7 @@ class PreflightService {
         let dbHasUpdates = false;
 
         // Read fix_audit.json if we don't have fix_summary or if we want to ensure it's normalized
-        if (job.job_type === 'AUTOFIX' && (!result.fix_summary || !result.delta_summary)) {
+        if (!result.fix_summary || !result.delta_summary) {
             const outputDir = await this._resolvePhysicalOutputDir(canonicalId, auth.tenantId);
             if (outputDir) {
                 if (!result.fix_summary || !result.fix_summary.available) {
@@ -1144,9 +1144,26 @@ class PreflightService {
             }
         }
 
-        if (safeResult.fix_summary && safeResult.fix_summary.available) {
-            safeResult.production_certified = safeResult.fix_summary.production_certified;
-            safeResult.requires_human_review = safeResult.fix_summary.review_required;
+        // Set root flags for UI and downstream
+        if (safeResult.fix_summary) {
+            if (safeResult.fix_summary.artifact_trust) {
+                safeResult.production_certified = safeResult.fix_summary.artifact_trust.production_certified === true;
+                safeResult.review_required = safeResult.fix_summary.artifact_trust.review_required === true;
+                safeResult.standard_certified = safeResult.fix_summary.artifact_trust.standard_certified === true;
+            } else {
+                safeResult.production_certified = safeResult.fix_summary.production_certified === true;
+                safeResult.review_required = safeResult.fix_summary.review_required === true;
+                safeResult.standard_certified = safeResult.fix_summary.standards_certification_governance?.standard_certified === true || 
+                                                safeResult.fix_summary.standard_certified === true;
+            }
+        } else if (safeResult.artifact_trust) {
+            safeResult.production_certified = safeResult.artifact_trust.production_certified === true;
+            safeResult.review_required = safeResult.artifact_trust.review_required === true;
+            safeResult.standard_certified = safeResult.artifact_trust.standard_certified === true;
+        } else {
+            safeResult.production_certified = safeResult.production_certified === true;
+            safeResult.review_required = safeResult.review_required === true;
+            // standard_certified might be directly on result from older engines
         }
 
         let normPayload = this._normalizeJobPayload(job, artifacts, safeResult, sourceFindings);

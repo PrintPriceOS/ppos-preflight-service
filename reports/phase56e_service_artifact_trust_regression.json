@@ -1,0 +1,84 @@
+[
+  {
+    "scenario": "1. certified.pdf filename only",
+    "primary_artifact_type": "certified_pdf",
+    "production_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "2. review_pdf primary",
+    "primary_artifact_type": "review_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "customer_visible": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "3. fixed_pdf primary",
+    "primary_artifact_type": "fixed_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "customer_visible": true,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "4. certified_pdf production-certified but not standards-certified",
+    "primary_artifact_type": "certified_pdf",
+    "production_certified": true,
+    "standard_certified": false,
+    "customer_visible": true,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "5. certified_pdf standards-certified with complete evidence",
+    "primary_artifact_type": "certified_pdf",
+    "production_certified": true,
+    "standard_certified": true,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "6. standards claim without evidence",
+    "primary_artifact_type": "certified_pdf",
+    "production_certified": true,
+    "standard_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "7. OutputIntent warning",
+    "primary_artifact_type": "fixed_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "8. governance blockers",
+    "primary_artifact_type": "review_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "9. artifact_trust absent",
+    "primary_artifact_type": "certified_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  },
+  {
+    "scenario": "10. false incoming metadata conflict",
+    "primary_artifact_type": "fixed_pdf",
+    "production_certified": false,
+    "standard_certified": false,
+    "pass": true,
+    "notes": "As expected"
+  }
+]
