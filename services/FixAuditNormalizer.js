@@ -96,6 +96,9 @@ class FixAuditNormalizer {
             if (auditData.validator_gap !== undefined) ret.validator_gap = auditData.validator_gap;
             if (auditData.input_mode !== undefined) ret.input_mode = auditData.input_mode;
             if (auditData.engine_real_detection !== undefined) ret.engine_real_detection = auditData.engine_real_detection;
+            if (auditData.qpdf_warnings !== undefined) ret.qpdf_warnings = auditData.qpdf_warnings;
+            if (auditData.metadata_cleanup_warnings !== undefined) ret.metadata_cleanup_warnings = auditData.metadata_cleanup_warnings;
+            if (auditData.internal_report_markers !== undefined) ret.internal_report_markers = auditData.internal_report_markers;
 
             // Image Quality Governance
             if (auditData.image_quality_governance) ret.image_quality_governance = auditData.image_quality_governance;

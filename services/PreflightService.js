@@ -2223,7 +2223,10 @@ class PreflightService {
             ...(res.warnings ? { warnings: res.warnings } : {}),
             ...(res.degraded_reasons ? { degraded_reasons: res.degraded_reasons } : {}),
             ...(res.forceBleed !== undefined ? { forceBleed: res.forceBleed } : {}),
-            ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
+            ...(res.targetProfile ? { targetProfile: res.targetProfile } : {}),
+            ...(res.qpdf_warnings ? { qpdf_warnings: res.qpdf_warnings } : {}),
+            ...(res.metadata_cleanup_warnings ? { metadata_cleanup_warnings: res.metadata_cleanup_warnings } : {}),
+            ...(res.internal_report_markers ? { internal_report_markers: res.internal_report_markers } : {})
         };
 
         let productionCertified = rootArtifactTrust.production_certified !== undefined ? rootArtifactTrust.production_certified : (normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false));
