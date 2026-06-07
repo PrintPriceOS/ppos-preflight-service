@@ -2093,6 +2093,7 @@ class PreflightService {
         // Standards Overclaim Protection & Artifact Trust Override
         const standardsGov = res?.standards_certification_governance || res?.fix_summary?.standards_certification_governance || {};
         const rootArtifactTrust = res?.artifact_trust || res?.fix_summary?.artifact_trust || {};
+        const structuralGov = res?.structural_metadata_governance || res?.fix_summary?.structural_metadata_governance || {};
         
         // Extract evidence fields considering artifact_trust.evidence
         const evidenceSrc = rootArtifactTrust.evidence || {};
@@ -2100,7 +2101,14 @@ class PreflightService {
         let validation_performed = evidenceSrc.validation_performed ?? res.validation_performed ?? standardsGov.validation_performed ?? false;
         let validation_passed = evidenceSrc.validation_passed ?? res.validation_passed ?? standardsGov.validation_passed ?? false;
         let compliance_claim_allowed = evidenceSrc.compliance_claim_allowed ?? rootArtifactTrust.compliance_claim_allowed ?? res.compliance_claim_allowed ?? standardsGov.compliance_claim_allowed ?? false;
-        
+        let validator_available = evidenceSrc.validator_available ?? res.validator_available ?? standardsGov.validator_available ?? false;
+
+        if (structuralGov.internal_standard_report_generated === true) {
+            validation_performed = false;
+            validation_passed = false;
+            validator_available = false;
+        }
+
         const hasValidEvidence = validation_performed && validation_passed && 
                                  (evidenceSrc.validator_name || res.validator_name || standardsGov.validator_name) && 
                                  (evidenceSrc.validator_version || res.validator_version || standardsGov.validator_version) &&
@@ -2111,7 +2119,7 @@ class PreflightService {
 
         const isClaimingCompliance = rootArtifactTrust.standard_certified || rootArtifactTrust.pdfx_compliance_claimed || res.pdfx_compliance_claimed || res.pdfa_compliance_claimed || res.standard_certified || compliance_claim_allowed || res.standard_claimed || standardsGov.pdfx_compliance_claimed || standardsGov.standard_certified;
 
-        if (isClaimingCompliance && (!hasValidEvidence || !compliance_claim_allowed)) {
+        if ((isClaimingCompliance && (!hasValidEvidence || !compliance_claim_allowed)) || structuralGov.metadata_cleanup_applied === true) {
             normalizedResult.pdfx_compliance_claimed = false;
             normalizedResult.pdfa_compliance_claimed = false;
             normalizedResult.standard_certified = false;
@@ -2218,8 +2226,17 @@ class PreflightService {
             ...(res.targetProfile ? { targetProfile: res.targetProfile } : {})
         };
 
-        const productionCertified = rootArtifactTrust.production_certified !== undefined ? rootArtifactTrust.production_certified : (normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false));
-        const requiresReview = rootArtifactTrust.review_required !== undefined ? rootArtifactTrust.review_required : (normalizedResult.requiresHumanReview !== undefined ? normalizedResult.requiresHumanReview : (res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL"));
+        let productionCertified = rootArtifactTrust.production_certified !== undefined ? rootArtifactTrust.production_certified : (normalizedResult.productionCertified !== undefined ? normalizedResult.productionCertified : (res.production_certified !== false && res.productionCertified !== false && res.summary?.after?.production_certified !== false));
+        let requiresReview = rootArtifactTrust.review_required !== undefined ? rootArtifactTrust.review_required : (normalizedResult.requiresHumanReview !== undefined ? normalizedResult.requiresHumanReview : (res.requires_human_review === true || res.requiresHumanReview === true || res.summary?.after?.requires_human_review === true || consensusStatus === "COMPLETED_WITH_REVIEW" || consensusStatus === "AUTOFIX_PARTIAL" || productionCertified === false || job?.status === "COMPLETED_WITH_REVIEW" || job?.status === "AUTOFIX_PARTIAL"));
+
+        if (structuralGov.production_certified === false) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (structuralGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
 
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
@@ -2287,7 +2304,8 @@ class PreflightService {
             delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
             production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
             review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
-            artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined
+            artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
+            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined
         };
 
         return {
@@ -2325,7 +2343,8 @@ class PreflightService {
             primary_artifact_type: rootArtifactTrust.primary_artifact_type || res.primary_artifact_type || undefined,
             customer_visible: rootArtifactTrust.customer_visible !== undefined ? rootArtifactTrust.customer_visible : undefined,
             blocked_by_governance_domains: rootArtifactTrust.blocked_by_governance_domains || [],
-            certification_labels: rootArtifactTrust.certification_labels || []
+            certification_labels: rootArtifactTrust.certification_labels || [],
+            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined
         };
     }
 }

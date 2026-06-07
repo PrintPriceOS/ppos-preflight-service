@@ -1,0 +1,238 @@
+{
+  "phase": "61C",
+  "timestamp": "2026-06-07T06:32:01.749Z",
+  "inputMode": "WORKER_INTEGRATION",
+  "allPassed": true,
+  "scenarios": [
+    {
+      "scenario": "1. NORMALIZE_OBJECT_STREAMS applied cleanly",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "structural_fix_applied": true,
+        "object_streams_normalized": true,
+        "review_required": false,
+        "production_certified": true
+      },
+      "autofix_repairs": [
+        {
+          "code": "NORMALIZE_OBJECT_STREAMS",
+          "status": "APPLIED",
+          "evidence": {
+            "objects_rewritten": 10
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "2. NORMALIZE_OBJECT_STREAMS skipped / qpdf missing",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "qpdf_available": false,
+        "structural_fix_applied": false,
+        "object_streams_normalized": false,
+        "production_certified": true
+      },
+      "production_certified": false,
+      "autofix_repairs": [
+        {
+          "code": "NORMALIZE_OBJECT_STREAMS",
+          "status": "SKIPPED",
+          "reason": "Missing QPDF toolchain",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "scenario": "3. REVOKE_FALSE_CERTIFICATION applied",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "false_certification_revoked": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "REVOKE_FALSE_CERTIFICATION",
+          "status": "APPLIED",
+          "evidence": {
+            "objects_stripped": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "4. STRIP_INVALID_PDFX_METADATA applied",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "invalid_pdfx_metadata_stripped": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "STRIP_INVALID_PDFX_METADATA",
+          "status": "APPLIED",
+          "evidence": {
+            "keys_removed": [
+              "GTS_PDFXVersion"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "5. STRIP_INVALID_PDFA_METADATA applied",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "invalid_pdfa_metadata_stripped": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "STRIP_INVALID_PDFA_METADATA",
+          "status": "APPLIED",
+          "evidence": {
+            "namespaces_removed": [
+              "pdfaid"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "6. NORMALIZE_STANDARD_METADATA applied",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "standard_metadata_normalized": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "NORMALIZE_STANDARD_METADATA",
+          "status": "APPLIED",
+          "evidence": {
+            "updated": true
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "7. GENERATE_STANDARD_VALIDATION_REPORT_INTERNAL generated",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "internal_standard_report_generated": true,
+        "validation_performed": false,
+        "validation_passed": false
+      },
+      "autofix_repairs": [
+        {
+          "code": "GENERATE_STANDARD_VALIDATION_REPORT_INTERNAL",
+          "status": "APPLIED",
+          "evidence": {
+            "format": "vera_json"
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "8. Metadata cleanup with certified.pdf present",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "STRIP_INVALID_PDFX_METADATA",
+          "status": "APPLIED",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "scenario": "9. Conflicting legacy metadata says standard_certified=true",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": true,
+        "review_required": true,
+        "production_certified": false
+      },
+      "production_certified": false,
+      "standard_certified": false,
+      "pdfx_compliance_claimed": false,
+      "pdfa_compliance_claimed": false,
+      "autofix_repairs": [
+        {
+          "code": "REVOKE_FALSE_CERTIFICATION",
+          "status": "APPLIED",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "scenario": "10. Evidence preservation for skipped/failed states",
+      "pass": true,
+      "reasons": [],
+      "structural_gov": {
+        "metadata_cleanup_applied": false,
+        "structural_fix_applied": false,
+        "production_certified": true
+      },
+      "production_certified": false,
+      "autofix_repairs": [
+        {
+          "code": "NORMALIZE_OBJECT_STREAMS",
+          "status": "FAILED",
+          "reason": "QPDF crash",
+          "evidence": {
+            "exitCode": 139
+          }
+        },
+        {
+          "code": "REVOKE_FALSE_CERTIFICATION",
+          "status": "SKIPPED",
+          "reason": "Not certified",
+          "evidence": {
+            "cert_exists": false
+          }
+        }
+      ]
+    }
+  ]
+}
