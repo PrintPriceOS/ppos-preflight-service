@@ -256,7 +256,10 @@ class PreflightService {
                 const reportPath = path.join(artifactOutputDir, 'report.json');
                 await fs.writeJson(reportPath, report);
 
-                const artifacts = await this.getJobArtifacts(jobId, tenantId);
+                const artifactsPayload = await this.getJobArtifacts(jobId, tenantId);
+                const artifacts = Array.isArray(artifactsPayload)
+                    ? artifactsPayload
+                    : (artifactsPayload?.artifacts || []);
 
                 // v2.4.120: Verify critical analysis artifacts
                 const hasCertified = artifacts.some(a => a.type === 'certified_pdf');
@@ -614,7 +617,10 @@ class PreflightService {
                     await fs.copy(fixResult.fixedPath, fixedPath);
                 }
 
-                const artifacts = await this.getJobArtifacts(jobId, tenantId);
+                const artifactsPayload = await this.getJobArtifacts(jobId, tenantId);
+                const artifacts = Array.isArray(artifactsPayload)
+                    ? artifactsPayload
+                    : (artifactsPayload?.artifacts || []);
 
                 const resultPayload = {
                     sourceJobId: assetId,
@@ -636,7 +642,13 @@ class PreflightService {
                     job_type: 'AUTOFIX'
                 };
 
-                const normalizedPayload = this._normalizeJobPayload(jobObjForNorm, artifacts, resultPayload);
+                const syncSourceFindings = sourceResultObj
+                    ? (Array.isArray(sourceResultObj.findings) && sourceResultObj.findings.length > 0
+                        ? sourceResultObj.findings
+                        : (Array.isArray(sourceResultObj.issues) ? sourceResultObj.issues : []))
+                    : [];
+
+                const normalizedPayload = this._normalizeJobPayload(jobObjForNorm, artifacts, resultPayload, syncSourceFindings);
 
                 await db.execute(
                     "UPDATE jobs SET status = ?, result = ? WHERE id = ?",
@@ -866,7 +878,10 @@ class PreflightService {
                 }
 
                 // Retrieve artifacts if available
-                const artifacts = await this.getJobArtifacts(canonicalId, row.tenant_id);
+                const artifactsPayload = await this.getJobArtifacts(canonicalId, row.tenant_id);
+                const artifacts = Array.isArray(artifactsPayload)
+                    ? artifactsPayload
+                    : (artifactsPayload?.artifacts || []);
 
                 // Run baseline normalization
                 const normalized = this._normalizeJobPayload(row, artifacts, resObj);
@@ -929,7 +944,7 @@ class PreflightService {
         let job = null;
         let dbRows = [];
         try {
-            const [jobRows] = await db.query(
+            const jobRows = await db.query(
                 "SELECT id, status, job_type, progress, result, error, created_at FROM jobs WHERE id = ? AND tenant_id = ?",
                 [jobId, auth.tenantId]
             );
@@ -1211,7 +1226,7 @@ class PreflightService {
         let dbHasUpdates = false;
 
         try {
-            const [jobRows] = await db.query("SELECT * FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
+            const jobRows = await db.query("SELECT * FROM jobs WHERE id = ? AND tenant_id = ?", [jobId, tenantId]);
             if (jobRows && jobRows.length > 0) {
                 const job = jobRows[0];
                 isAutofix = job.job_type === 'AUTOFIX';
@@ -1717,9 +1732,11 @@ class PreflightService {
             };
 
             if (repair.status === 'APPLIED') fixed.push(repairEntry);
-            else if (repair.status === 'SKIPPED') skipped.push(repairEntry);
             else if (repair.status === 'FAILED') failed.push(repairEntry);
-            else not_attempted.push(entry);
+            // Engine emits several "not applied" status variants (SKIPPED,
+            // SKIPPED_UNSUPPORTED, UNSUPPORTED, UNSUPPORTED_FIX, NO_CHANGE, ...) —
+            // classify by exclusion so a matched repair is never silently dropped.
+            else skipped.push(repairEntry);
         }
 
         return {
@@ -2055,9 +2072,12 @@ class PreflightService {
 
             // Extract from repairs if not explicitly provided
             if (skippedFixes.length === 0 && appliedFixes.length === 0 && failedFixes.length === 0 && allRepairs.length > 0) {
-                skippedFixes = allRepairs.filter(r => r.status === 'SKIPPED');
                 appliedFixes = allRepairs.filter(r => r.status === 'APPLIED');
                 failedFixes = allRepairs.filter(r => r.status === 'FAILED');
+                // The engine emits several "not applied" status variants (SKIPPED,
+                // SKIPPED_UNSUPPORTED, UNSUPPORTED, UNSUPPORTED_FIX, NO_CHANGE, ...).
+                // Classify by exclusion so repairsCount always equals applied+skipped+failed.
+                skippedFixes = allRepairs.filter(r => r.status !== 'APPLIED' && r.status !== 'FAILED');
             }
             
             const fixRequiresHumanReview = (fix) => {
