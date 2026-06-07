@@ -44,7 +44,17 @@ class FixAuditNormalizer {
                         validation_performed: fix.validation_performed,
                         validation_passed: fix.validation_passed,
                         validator_name: fix.validator_name,
-                        validator_version: fix.validator_version
+                        validator_version: fix.validator_version,
+                        pages_processed: fix.pages_processed,
+                        page_boxes_before: fix.page_boxes_before,
+                        page_boxes_after: fix.page_boxes_after,
+                        mark_geometry: fix.mark_geometry,
+                        safety_checks: fix.safety_checks,
+                        detection_confidence: fix.detection_confidence,
+                        warnings: fix.warnings,
+                        limitations: fix.limitations,
+                        skip_reason: fix.skip_reason,
+                        capability: fix.capability
                     };
                 });
             };
@@ -146,6 +156,11 @@ class FixAuditNormalizer {
                 ret.structural_metadata_governance = auditData.structural_metadata_governance;
             }
 
+            // Page Marks Governance (Phase 62)
+            if (auditData.page_marks_governance) {
+                ret.page_marks_governance = auditData.page_marks_governance;
+            }
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
@@ -154,6 +169,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.standards_certification_governance) ret.delta_report.standards_certification_governance = auditData.delta_report.standards_certification_governance;
                 if (auditData.delta_report.structural_metadata_governance) ret.delta_report.structural_metadata_governance = auditData.delta_report.structural_metadata_governance;
                 if (auditData.delta_report.artifact_trust) ret.delta_report.artifact_trust = auditData.delta_report.artifact_trust;
+                if (auditData.delta_report.page_marks_governance) ret.delta_report.page_marks_governance = auditData.delta_report.page_marks_governance;
             }
 
             return ret;

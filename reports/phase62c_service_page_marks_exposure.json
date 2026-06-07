@@ -1,0 +1,101 @@
+{
+  "scenarios": [
+    {
+      "name": "Capability Contract",
+      "status": "PASS"
+    },
+    {
+      "name": "Normalizer preservation",
+      "status": "PASS"
+    },
+    {
+      "name": "ADD_CROP_MARKS_APPLIED",
+      "status": "PASS"
+    },
+    {
+      "name": "REMOVE_REGISTRATION_MARKS_SKIPPED",
+      "status": "PASS"
+    },
+    {
+      "name": "cert_downgrade_due_to_page_marks",
+      "status": "PASS"
+    },
+    {
+      "name": "artifact_trust_authoritative",
+      "status": "PASS"
+    }
+  ],
+  "passed": 6,
+  "failed": 0,
+  "matrix": {
+    "ADD_CROP_MARKS": {
+      "fix_id": "ADD_CROP_MARKS",
+      "label": "Add Crop Marks",
+      "category": "page_marks",
+      "implemented": true,
+      "detectable": true,
+      "autofixable": true,
+      "risk_level": "MEDIUM",
+      "requires_human_review": true,
+      "production_safe": false,
+      "visually_sensitive": true,
+      "destructive": false,
+      "evidence_required": true,
+      "toolchain": [
+        "pdf-lib"
+      ],
+      "supported_modes": [
+        "REVIEW_REQUIRED",
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Adds crop marks for printing. Review required to ensure marks do not obscure important content.",
+      "operator_message": "Adds TrimBox visual marks. Requires human review. Not production safe by default."
+    },
+    "REMOVE_REGISTRATION_MARKS": {
+      "fix_id": "REMOVE_REGISTRATION_MARKS",
+      "label": "Remove Registration Marks",
+      "category": "page_marks",
+      "implemented": true,
+      "detectable": true,
+      "autofixable": true,
+      "risk_level": "HIGH",
+      "requires_human_review": true,
+      "production_safe": false,
+      "visually_sensitive": true,
+      "destructive": true,
+      "evidence_required": true,
+      "toolchain": [
+        "pdf-lib"
+      ],
+      "supported_modes": [
+        "REVIEW_REQUIRED",
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Removes registration marks. Requires human review.",
+      "operator_message": "Removes mark objects outside TrimBox. Requires human review and safety checks. Destructive."
+    },
+    "NORMALIZE_PAGE_MARKS": {
+      "fix_id": "NORMALIZE_PAGE_MARKS",
+      "label": "Normalize Page Marks",
+      "category": "page_marks",
+      "implemented": true,
+      "detectable": true,
+      "autofixable": true,
+      "risk_level": "MEDIUM",
+      "requires_human_review": true,
+      "production_safe": false,
+      "visually_sensitive": true,
+      "destructive": false,
+      "evidence_required": true,
+      "toolchain": [
+        "pdf-lib"
+      ],
+      "supported_modes": [
+        "REVIEW_REQUIRED",
+        "EXPERIMENTAL"
+      ],
+      "customer_message": "Normalizes existing page marks. Review required.",
+      "operator_message": "Adjusts registration colors to true separation. Requires human review."
+    }
+  }
+}

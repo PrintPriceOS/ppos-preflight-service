@@ -1398,6 +1398,40 @@ class PreflightService {
             }
         }
 
+        const pageMarksGovSources = [
+            fixAuditData?.page_marks_governance,
+            fixAuditData?.delta_report?.page_marks_governance,
+            res.fix_summary?.page_marks_governance,
+            deltaReportData?.page_marks_governance,
+            res.delta_report?.page_marks_governance,
+            res.delta_summary?.page_marks_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let pageMarksGovActive = false;
+        let pageMarksCertPdfAllowed = true;
+        for (const src of pageMarksGovSources) {
+            if (src) {
+                if (src.review_required === true) pageMarksGovActive = true;
+                if (src.certified_pdf_allowed === false) pageMarksCertPdfAllowed = false;
+                if (src.production_certified === false) pageMarksGovActive = true;
+                if (src.page_marks_fix_applied === true) pageMarksGovActive = true;
+                if (src.crop_marks_added === true) pageMarksGovActive = true;
+                if (src.removal_not_safe === true) pageMarksGovActive = true;
+                if (src.marks_inside_trim === true) pageMarksGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) pageMarksGovActive = true;
+            }
+        }
+
+        if (pageMarksGovActive || pageMarksCertPdfAllowed === false) {
+            productionCertified = false;
+            if (pageMarksGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2241,6 +2275,43 @@ class PreflightService {
             normalizedResult.requiresHumanReview = true;
         }
 
+        // Phase 62C: Page Marks Governance Enforcement
+        // artifact_trust is the final authority — page_marks_governance informs/degrades but does not
+        // override explicit artifact_trust allowances.
+        const pageMarksGov = res?.page_marks_governance || res?.fix_summary?.page_marks_governance || {};
+        const atExplicitlyAllowsProduction = rootArtifactTrust.production_certified === true;
+        const atExplicitlyNoReview = rootArtifactTrust.review_required === false;
+
+        const pageMarksRequiresBlock = Object.keys(pageMarksGov).length > 0 && (
+            pageMarksGov.production_certified === false ||
+            pageMarksGov.certified_pdf_allowed === false ||
+            pageMarksGov.page_marks_fix_applied === true ||
+            pageMarksGov.crop_marks_added === true ||
+            pageMarksGov.removal_not_safe === true ||
+            pageMarksGov.marks_inside_trim === true
+        );
+
+        if (!atExplicitlyAllowsProduction && pageMarksRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && pageMarksGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (pageMarksGov.page_marks_fix_applied === true && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
         let certification_level = 'UNKNOWN';
@@ -2308,7 +2379,8 @@ class PreflightService {
             production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
             review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
             artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
-            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined
+            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
+            page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined
         };
 
         return {
@@ -2347,7 +2419,10 @@ class PreflightService {
             customer_visible: rootArtifactTrust.customer_visible !== undefined ? rootArtifactTrust.customer_visible : undefined,
             blocked_by_governance_domains: rootArtifactTrust.blocked_by_governance_domains || [],
             certification_labels: rootArtifactTrust.certification_labels || [],
-            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined
+            structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
+            page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
+            requiresHumanReview: requiresReview,
+            productionCertified: productionCertified
         };
     }
 }
