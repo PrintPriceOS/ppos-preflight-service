@@ -1,0 +1,113 @@
+{
+  "timestamp": "2026-06-08T18:55:42.107Z",
+  "phase": "64C",
+  "repo": "ppos-preflight-service",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression — ink_governance capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REDUCE_TOTAL_INK_COVERAGE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: MAP_RICH_BLACK_TEXT_TO_K_ONLY returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: DETECT_SMALL_TEXT_RICH_BLACK returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: MAP_REGISTRATION_COLOR_TO_BLACK returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: NORMALIZE_BLACK_TEXT returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REDUCE_TOTAL_INK_COVERAGE on clean control — honest skip",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from ink fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS"
+    }
+  ],
+  "passed": 10,
+  "failed": 0,
+  "smoke_passed": true,
+  "results": [
+    {
+      "scenario": "Capability Contract Regression — ink_governance capabilities",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REDUCE_TOTAL_INK_COVERAGE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: MAP_RICH_BLACK_TEXT_TO_K_ONLY returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: DETECT_SMALL_TEXT_RICH_BLACK returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: MAP_REGISTRATION_COLOR_TO_BLACK returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: NORMALIZE_BLACK_TEXT returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REDUCE_TOTAL_INK_COVERAGE on clean control — honest skip",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: standards overclaim from ink fix must be rejected",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    }
+  ]
+}

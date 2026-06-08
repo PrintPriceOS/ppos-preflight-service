@@ -1482,6 +1482,42 @@ class PreflightService {
             }
         }
 
+        const inkGovSources = [
+            fixAuditData?.ink_governance,
+            fixAuditData?.delta_report?.ink_governance,
+            res.fix_summary?.ink_governance,
+            deltaReportData?.ink_governance,
+            res.delta_report?.ink_governance,
+            res.delta_summary?.ink_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let inkGovActive = false;
+        let inkCertPdfAllowed = true;
+        for (const src of inkGovSources) {
+            if (src) {
+                if (src.review_required === true) inkGovActive = true;
+                if (src.certified_pdf_allowed === false) inkCertPdfAllowed = false;
+                if (src.production_certified === false) inkGovActive = true;
+                if (src.ink_fix_applied === true) inkGovActive = true;
+                if (src.tac_reduction_attempted === true) inkGovActive = true;
+                if (src.tac_reduction_applied === true) inkGovActive = true;
+                if (src.rich_black_text_mapped === true) inkGovActive = true;
+                if (src.registration_color_mapped === true) inkGovActive = true;
+                if (src.visual_change_expected === true) inkGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) inkGovActive = true;
+            }
+        }
+
+        if (inkGovActive || inkCertPdfAllowed === false) {
+            productionCertified = false;
+            if (inkGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2403,6 +2439,43 @@ class PreflightService {
             }
         }
 
+        // Phase 64C: Ink Governance Enforcement
+        // artifact_trust is the final authority — ink_governance informs/degrades but does not
+        // override explicit artifact_trust allowances.
+        const inkGov = res?.ink_governance || res?.fix_summary?.ink_governance || {};
+
+        const inkGovRequiresBlock = Object.keys(inkGov).length > 0 && (
+            inkGov.production_certified === false ||
+            inkGov.certified_pdf_allowed === false ||
+            inkGov.ink_fix_applied === true ||
+            inkGov.tac_reduction_attempted === true ||
+            inkGov.tac_reduction_applied === true ||
+            inkGov.rich_black_text_mapped === true ||
+            inkGov.registration_color_mapped === true ||
+            inkGov.visual_change_expected === true
+        );
+
+        if (!atExplicitlyAllowsProduction && inkGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && inkGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (inkGov.ink_fix_applied === true && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
         let certification_level = 'UNKNOWN';
@@ -2472,7 +2545,8 @@ class PreflightService {
             artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
-            security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined
+            security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
+            ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined
         };
 
         return {
@@ -2514,6 +2588,7 @@ class PreflightService {
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
+            ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
