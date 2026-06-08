@@ -1447,6 +1447,41 @@ class PreflightService {
             }
         }
 
+        const securityInteractivityGovSources = [
+            fixAuditData?.security_interactivity_governance,
+            fixAuditData?.delta_report?.security_interactivity_governance,
+            res.fix_summary?.security_interactivity_governance,
+            deltaReportData?.security_interactivity_governance,
+            res.delta_report?.security_interactivity_governance,
+            res.delta_summary?.security_interactivity_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let securityInteractivityGovActive = false;
+        let securityInteractivityCertPdfAllowed = true;
+        for (const src of securityInteractivityGovSources) {
+            if (src) {
+                if (src.review_required === true) securityInteractivityGovActive = true;
+                if (src.certified_pdf_allowed === false) securityInteractivityCertPdfAllowed = false;
+                if (src.production_certified === false) securityInteractivityGovActive = true;
+                if (src.security_interactivity_fix_applied === true) securityInteractivityGovActive = true;
+                if (src.active_content_removed === true) securityInteractivityGovActive = true;
+                if (src.annotation_flatten_skipped === true) securityInteractivityGovActive = true;
+                if (src.form_flatten_skipped === true) securityInteractivityGovActive = true;
+                if (src.unresolved_interactive_content === true) securityInteractivityGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) securityInteractivityGovActive = true;
+            }
+        }
+
+        if (securityInteractivityGovActive || securityInteractivityCertPdfAllowed === false) {
+            productionCertified = false;
+            if (securityInteractivityGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2332,6 +2367,42 @@ class PreflightService {
             }
         }
 
+        // Phase 63C: Security / Interactivity Governance Enforcement
+        // artifact_trust is the final authority — security_interactivity_governance informs/degrades but does not
+        // override explicit artifact_trust allowances.
+        const securityInteractivityGov = res?.security_interactivity_governance || res?.fix_summary?.security_interactivity_governance || {};
+
+        const securityInteractivityRequiresBlock = Object.keys(securityInteractivityGov).length > 0 && (
+            securityInteractivityGov.production_certified === false ||
+            securityInteractivityGov.certified_pdf_allowed === false ||
+            securityInteractivityGov.security_interactivity_fix_applied === true ||
+            securityInteractivityGov.active_content_removed === true ||
+            securityInteractivityGov.annotation_flatten_skipped === true ||
+            securityInteractivityGov.form_flatten_skipped === true ||
+            securityInteractivityGov.unresolved_interactive_content === true
+        );
+
+        if (!atExplicitlyAllowsProduction && securityInteractivityRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && securityInteractivityGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (securityInteractivityGov.security_interactivity_fix_applied === true && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
         let certification_level = 'UNKNOWN';
@@ -2400,7 +2471,8 @@ class PreflightService {
             review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
             artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
-            page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined
+            page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
+            security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined
         };
 
         return {
@@ -2441,6 +2513,7 @@ class PreflightService {
             certification_labels: rootArtifactTrust.certification_labels || [],
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
+            security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };

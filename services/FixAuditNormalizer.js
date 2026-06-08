@@ -161,6 +161,11 @@ class FixAuditNormalizer {
                 ret.page_marks_governance = auditData.page_marks_governance;
             }
 
+            // Security / Interactivity Governance (Phase 63)
+            if (auditData.security_interactivity_governance) {
+                ret.security_interactivity_governance = auditData.security_interactivity_governance;
+            }
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
@@ -170,6 +175,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.structural_metadata_governance) ret.delta_report.structural_metadata_governance = auditData.delta_report.structural_metadata_governance;
                 if (auditData.delta_report.artifact_trust) ret.delta_report.artifact_trust = auditData.delta_report.artifact_trust;
                 if (auditData.delta_report.page_marks_governance) ret.delta_report.page_marks_governance = auditData.delta_report.page_marks_governance;
+                if (auditData.delta_report.security_interactivity_governance) ret.delta_report.security_interactivity_governance = auditData.delta_report.security_interactivity_governance;
             }
 
             return ret;

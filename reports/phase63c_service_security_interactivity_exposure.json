@@ -1,0 +1,163 @@
+{
+  "timestamp": "2026-06-08T14:57:52.793Z",
+  "phase": "63C",
+  "repo": "ppos-preflight-service",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression — pdf_security_interactivity capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: STRIP_JAVASCRIPT removes or skips honestly",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_LAUNCH_ACTIONS removes or skips honestly",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_EMBEDDED_FILES removes or skips honestly",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_DOCUMENT_OPEN_ACTIONS removes or skips honestly",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_PAGE_OPEN_ACTIONS removes or skips honestly",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: FLATTEN_ANNOTATIONS applies only if safe, otherwise SKIPPED_UNSUPPORTED",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: FLATTEN_FORMS applies only if safe, otherwise SKIPPED_UNSUPPORTED",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: mixed_interactive_content preserves evidence (STRIP_JAVASCRIPT)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: mixed_interactive_content preserves evidence (FLATTEN_FORMS)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: clean_control returns no action with evidence (STRIP_JAVASCRIPT)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: clean_control returns no action with evidence (FLATTEN_FORMS)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from security/interactivity fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS"
+    }
+  ],
+  "passed": 15,
+  "failed": 0,
+  "smoke_passed": true,
+  "results": [
+    {
+      "scenario": "Capability Contract Regression — pdf_security_interactivity capabilities",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: STRIP_JAVASCRIPT removes or skips honestly",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REMOVE_LAUNCH_ACTIONS removes or skips honestly",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REMOVE_EMBEDDED_FILES removes or skips honestly",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REMOVE_DOCUMENT_OPEN_ACTIONS removes or skips honestly",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REMOVE_PAGE_OPEN_ACTIONS removes or skips honestly",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: FLATTEN_ANNOTATIONS applies only if safe, otherwise SKIPPED_UNSUPPORTED",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: FLATTEN_FORMS applies only if safe, otherwise SKIPPED_UNSUPPORTED",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: mixed_interactive_content preserves evidence (STRIP_JAVASCRIPT)",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: mixed_interactive_content preserves evidence (FLATTEN_FORMS)",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: clean_control returns no action with evidence (STRIP_JAVASCRIPT)",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: clean_control returns no action with evidence (FLATTEN_FORMS)",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: standards overclaim from security/interactivity fix must be rejected",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    }
+  ]
+}
