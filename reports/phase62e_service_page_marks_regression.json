@@ -1,0 +1,50 @@
+{
+  "phase": "62E.3",
+  "repo": "ppos-preflight-service",
+  "generated_at": "2026-06-08T13:50:40.790Z",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: ADD_CROP_MARKS safe margin (apply or honest skip)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: ADD_CROP_MARKS no margin (must skip honestly)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_REGISTRATION_MARKS outside TrimBox (skip unless provably safe)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REMOVE_REGISTRATION_MARKS inside TrimBox (must skip)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: NORMALIZE_PAGE_MARKS inconsistent (skip unless safe)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: clean control (no action / honest no-op)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from page mark fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: NO_ACTION_NEEDED evidence preservation",
+      "status": "PASS"
+    }
+  ],
+  "passed": 10,
+  "failed": 0
+}
