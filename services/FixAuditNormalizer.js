@@ -176,6 +176,11 @@ class FixAuditNormalizer {
                 ret.selective_image_governance = auditData.selective_image_governance;
             }
 
+            // Font Governance (Phase 66)
+            if (auditData.font_governance) {
+                ret.font_governance = auditData.font_governance;
+            }
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
@@ -188,6 +193,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.security_interactivity_governance) ret.delta_report.security_interactivity_governance = auditData.delta_report.security_interactivity_governance;
                 if (auditData.delta_report.ink_governance) ret.delta_report.ink_governance = auditData.delta_report.ink_governance;
                 if (auditData.delta_report.selective_image_governance) ret.delta_report.selective_image_governance = auditData.delta_report.selective_image_governance;
+                if (auditData.delta_report.font_governance) ret.delta_report.font_governance = auditData.delta_report.font_governance;
             }
 
             return ret;

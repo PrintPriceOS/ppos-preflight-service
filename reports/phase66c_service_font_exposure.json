@@ -1,0 +1,153 @@
+{
+  "timestamp": "2026-06-08T20:20:26.472Z",
+  "phase": "66C",
+  "repo": "ppos-preflight-service",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression — font_governance capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: FixRegistry font_governance (Phase 66A) capabilities check",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: EMBED_FONTS returns honest skip/result with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SUBSET_EMBEDDED_FONTS returns SKIPPED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: OUTLINE_TYPE3_FONTS returns SKIPPED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REPAIR_FONT_ENCODING returns SKIPPED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: FLAG_MISSING_GLYPHS_UNFIXABLE flags honestly without synthesis",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SUBSET_EMBEDDED_FONTS on clean control — honest skip",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: No-glyph-synthesis policy regression (aggregate)",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from font fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: glyph synthesis must never be reported as performed",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: destructive outline operations must force review",
+      "status": "PASS"
+    }
+  ],
+  "passed": 14,
+  "failed": 0,
+  "smoke_passed": true,
+  "results": [
+    {
+      "scenario": "Capability Contract Regression — font_governance capabilities",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: FixRegistry font_governance (Phase 66A) capabilities check",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: EMBED_FONTS returns honest skip/result with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SUBSET_EMBEDDED_FONTS returns SKIPPED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: OUTLINE_TYPE3_FONTS returns SKIPPED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REPAIR_FONT_ENCODING returns SKIPPED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: FLAG_MISSING_GLYPHS_UNFIXABLE flags honestly without synthesis",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SUBSET_EMBEDDED_FONTS on clean control — honest skip",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: No-glyph-synthesis policy regression (aggregate)",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: standards overclaim from font fix must be rejected",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: glyph synthesis must never be reported as performed",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: destructive outline operations must force review",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    }
+  ]
+}

@@ -1554,6 +1554,42 @@ class PreflightService {
             }
         }
 
+        const fontGovSources = [
+            fixAuditData?.font_governance,
+            fixAuditData?.delta_report?.font_governance,
+            res.fix_summary?.font_governance,
+            deltaReportData?.font_governance,
+            res.delta_report?.font_governance,
+            res.delta_summary?.font_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let fontGovActive = false;
+        let fontCertPdfAllowed = true;
+        for (const src of fontGovSources) {
+            if (src) {
+                if (src.review_required === true) fontGovActive = true;
+                if (src.certified_pdf_allowed === false) fontCertPdfAllowed = false;
+                if (src.production_certified === false) fontGovActive = true;
+                if (src.font_fix_applied === true) fontGovActive = true;
+                if (src.fonts_embedded === true) fontGovActive = true;
+                if (src.font_embedding_skipped === true) fontGovActive = true;
+                if (src.type3_fonts_detected === true) fontGovActive = true;
+                if (src.glyphs_missing_unfixable === true) fontGovActive = true;
+                if (src.font_source_available === false) fontGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) fontGovActive = true;
+            }
+        }
+
+        if (fontGovActive || fontCertPdfAllowed === false) {
+            productionCertified = false;
+            if (fontGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2549,6 +2585,43 @@ class PreflightService {
             }
         }
 
+        // Phase 66C: Font Governance Enforcement
+        // artifact_trust is the final authority — font_governance informs/degrades but does not
+        // override explicit artifact_trust allowances.
+        const fontGov = res?.font_governance || res?.fix_summary?.font_governance || {};
+
+        const fontGovRequiresBlock = Object.keys(fontGov).length > 0 && (
+            fontGov.production_certified === false ||
+            fontGov.certified_pdf_allowed === false ||
+            fontGov.font_fix_applied === true ||
+            fontGov.fonts_embedded === true ||
+            fontGov.font_embedding_skipped === true ||
+            fontGov.type3_fonts_detected === true ||
+            fontGov.glyphs_missing_unfixable === true ||
+            fontGov.font_source_available === false
+        );
+
+        if (!atExplicitlyAllowsProduction && fontGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && fontGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (fontGov.font_fix_applied === true && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
         let certification_level = 'UNKNOWN';
@@ -2620,7 +2693,8 @@ class PreflightService {
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
-            selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined
+            selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
+            font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined
         };
 
         return {
@@ -2664,6 +2738,7 @@ class PreflightService {
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
+            font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
