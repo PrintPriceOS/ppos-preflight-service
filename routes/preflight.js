@@ -27,7 +27,7 @@ const UPLOADS_DIR = process.env.PPOS_UPLOADS_DIR || path.join(__dirname, '../tem
 fs.ensureDirSync(UPLOADS_DIR);
 
 // PRODUCTION LIMITS (Phase 5)
-const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
 const storage = new StorageManager(UPLOADS_DIR);
 const service = new PreflightService(
@@ -174,8 +174,18 @@ async function preflightRoutes(fastify, options) {
             const { auth } = request.context;
             if (!auth) return reply.status(401).send({ error: 'UNAUTHORIZED' });
 
+            const fileBuffer = await fileData.toBuffer();
+            if (fileData.file.truncated) {
+                return reply.status(413).send({
+                    error: ErrorCodes.PDF_TOO_LARGE,
+                    message: `File exceeds the maximum upload size of ${MAX_FILE_SIZE} bytes`,
+                    maxSizeBytes: MAX_FILE_SIZE,
+                    traceId: request.context.requestId
+                });
+            }
+
             const result = await service.analyze(
-                await fileData.toBuffer(),
+                fileBuffer,
                 fileData.filename,
                 request.context
             );

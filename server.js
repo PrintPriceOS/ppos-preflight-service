@@ -10,7 +10,7 @@ const StorageManager = require('./utils/StorageManager');
 
 // Plugins
 fastify.register(require('@fastify/multipart'), {
-    limits: { fileSize: 500 * 1024 * 1024 } // 500MB
+    limits: { fileSize: 2 * 1024 * 1024 * 1024 } // 2GB
 });
 fastify.register(require('@fastify/cors'));
 fastify.register(require('@fastify/helmet'));
