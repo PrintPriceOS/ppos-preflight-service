@@ -1,0 +1,123 @@
+{
+  "timestamp": "2026-06-08T19:41:00.078Z",
+  "phase": "65C",
+  "repo": "ppos-preflight-service",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression — image_quality capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: CONVERT_IMAGE_RGB_TO_CMYK_SELECTIVE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: TAG_UNTAGGED_IMAGES returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: NORMALIZE_IMAGE_ICC_PROFILE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: DOWNSAMPLE_EXCESSIVE_RESOLUTION returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: FLAG_LOW_RES_IMAGES_UNFIXABLE flags honestly without upscaling",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: CONVERT_IMAGE_RGB_TO_CMYK_SELECTIVE on clean control — honest skip",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from selective image fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: low-res unfixable must never report upscaling performed",
+      "status": "PASS"
+    }
+  ],
+  "passed": 11,
+  "failed": 0,
+  "smoke_passed": true,
+  "results": [
+    {
+      "scenario": "Capability Contract Regression — image_quality capabilities",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: CONVERT_IMAGE_RGB_TO_CMYK_SELECTIVE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: TAG_UNTAGGED_IMAGES returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: NORMALIZE_IMAGE_ICC_PROFILE returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: DOWNSAMPLE_EXCESSIVE_RESOLUTION returns SKIPPED_UNSUPPORTED with evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: FLAG_LOW_RES_IMAGES_UNFIXABLE flags honestly without upscaling",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: CONVERT_IMAGE_RGB_TO_CMYK_SELECTIVE on clean control — honest skip",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: standards overclaim from selective image fix must be rejected",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: certified.pdf filename must not be trusted by name",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: low-res unfixable must never report upscaling performed",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    }
+  ]
+}

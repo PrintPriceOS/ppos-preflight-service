@@ -1518,6 +1518,42 @@ class PreflightService {
             }
         }
 
+        const selectiveImageGovSources = [
+            fixAuditData?.selective_image_governance,
+            fixAuditData?.delta_report?.selective_image_governance,
+            res.fix_summary?.selective_image_governance,
+            deltaReportData?.selective_image_governance,
+            res.delta_report?.selective_image_governance,
+            res.delta_summary?.selective_image_governance,
+            fixAuditData,
+            deltaReportData,
+            res
+        ];
+
+        let selectiveImageGovActive = false;
+        let selectiveImageCertPdfAllowed = true;
+        for (const src of selectiveImageGovSources) {
+            if (src) {
+                if (src.review_required === true) selectiveImageGovActive = true;
+                if (src.certified_pdf_allowed === false) selectiveImageCertPdfAllowed = false;
+                if (src.production_certified === false) selectiveImageGovActive = true;
+                if (src.image_fix_applied === true) selectiveImageGovActive = true;
+                if (src.rgb_images_converted === true) selectiveImageGovActive = true;
+                if (src.image_profiles_normalized === true) selectiveImageGovActive = true;
+                if (src.excessive_resolution_downsampled === true) selectiveImageGovActive = true;
+                if (src.low_res_unfixable === true) selectiveImageGovActive = true;
+                if (src.visual_change_expected === true) selectiveImageGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) selectiveImageGovActive = true;
+            }
+        }
+
+        if (selectiveImageGovActive || selectiveImageCertPdfAllowed === false) {
+            productionCertified = false;
+            if (selectiveImageGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2476,6 +2512,43 @@ class PreflightService {
             }
         }
 
+        // Phase 65C: Selective Image Governance Enforcement
+        // artifact_trust is the final authority — selective_image_governance informs/degrades but does not
+        // override explicit artifact_trust allowances.
+        const selectiveImageGov = res?.selective_image_governance || res?.fix_summary?.selective_image_governance || {};
+
+        const selectiveImageGovRequiresBlock = Object.keys(selectiveImageGov).length > 0 && (
+            selectiveImageGov.production_certified === false ||
+            selectiveImageGov.certified_pdf_allowed === false ||
+            selectiveImageGov.image_fix_applied === true ||
+            selectiveImageGov.rgb_images_converted === true ||
+            selectiveImageGov.image_profiles_normalized === true ||
+            selectiveImageGov.excessive_resolution_downsampled === true ||
+            selectiveImageGov.low_res_unfixable === true ||
+            selectiveImageGov.visual_change_expected === true
+        );
+
+        if (!atExplicitlyAllowsProduction && selectiveImageGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && selectiveImageGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (selectiveImageGov.image_fix_applied === true && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         let returnedArtifacts = isAutofixJob ? (res.artifacts || artifactList.reduce((acc, a) => ({ ...acc, [a.type]: a.name }), {})) : artifactList;
         
         let certification_level = 'UNKNOWN';
@@ -2546,7 +2619,8 @@ class PreflightService {
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
-            ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined
+            ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
+            selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined
         };
 
         return {
@@ -2589,6 +2663,7 @@ class PreflightService {
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
+            selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
