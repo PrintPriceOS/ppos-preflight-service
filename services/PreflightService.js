@@ -1649,6 +1649,32 @@ class PreflightService {
             }
         }
 
+        // Proof Approval Governance (Phase 70)
+        const proofApprovalGovSourcesArtifacts = [
+            fixAuditData?.proof_approval_governance,
+            fixAuditData?.delta_report?.proof_approval_governance,
+            res.fix_summary?.proof_approval_governance,
+            deltaReportData?.proof_approval_governance,
+            res.delta_report?.proof_approval_governance,
+            res.delta_summary?.proof_approval_governance,
+        ];
+
+        let proofApprovalGovActiveArtifacts = false;
+        let resolvedProofApprovalGov = null;
+        for (const src of proofApprovalGovSourcesArtifacts) {
+            if (src) {
+                if (!resolvedProofApprovalGov) resolvedProofApprovalGov = src;
+                if (src.review_required === true) proofApprovalGovActiveArtifacts = true;
+                if (src.proof_required === true && src.proof_status !== 'APPROVED') proofApprovalGovActiveArtifacts = true;
+                if (src.visual_change_detected === true && src.proof_status !== 'APPROVED') proofApprovalGovActiveArtifacts = true;
+            }
+        }
+
+        if (proofApprovalGovActiveArtifacts) {
+            productionCertified = false;
+            requiresReview = true;
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1864,6 +1890,19 @@ class PreflightService {
                     standard_certified: false,
                     warnings: resolvedVisualDiffGov.warnings || [],
                     evidence: resolvedVisualDiffGov.evidence || {}
+                };
+            }
+
+            if (resolvedProofApprovalGov) {
+                artifact_summary.proof_approval_governance = {
+                    proof_required: resolvedProofApprovalGov.proof_required ?? false,
+                    proof_available: resolvedProofApprovalGov.proof_available ?? false,
+                    proof_id: resolvedProofApprovalGov.proof_id ?? null,
+                    proof_status: resolvedProofApprovalGov.proof_status ?? 'NOT_REQUIRED',
+                    visual_change_detected: resolvedProofApprovalGov.visual_change_detected ?? false,
+                    review_required: resolvedProofApprovalGov.review_required ?? false,
+                    production_certified: false,
+                    evidence: resolvedProofApprovalGov.evidence || {}
                 };
             }
 
@@ -2721,6 +2760,33 @@ class PreflightService {
             }
         }
 
+        // Phase 70C: Proof Approval Governance Enforcement
+        // proof_required=true and proof_status!=APPROVED blocks production.
+        // visual_change_detected=true and proof_status!=APPROVED blocks production.
+        const proofApprovalGovNorm = res?.proof_approval_governance || res?.fix_summary?.proof_approval_governance || {};
+
+        const proofApprovalRequiresBlock = Object.keys(proofApprovalGovNorm).length > 0 && (
+            (proofApprovalGovNorm.proof_required === true && proofApprovalGovNorm.proof_status !== 'APPROVED') ||
+            (proofApprovalGovNorm.visual_change_detected === true && proofApprovalGovNorm.proof_status !== 'APPROVED')
+        );
+
+        if (!atExplicitlyAllowsProduction && proofApprovalRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && proofApprovalGovNorm.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (proofApprovalRequiresBlock && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         // Phase 66C: Font Governance Enforcement
         // artifact_trust is the final authority — font_governance informs/degrades but does not
         // override explicit artifact_trust allowances.
@@ -2837,6 +2903,10 @@ class PreflightService {
                 ...visualDiffGovNorm,
                 production_certified: false,
                 standard_certified: false
+            } : undefined,
+            proof_approval_governance: Object.keys(proofApprovalGovNorm).length > 0 ? {
+                ...proofApprovalGovNorm,
+                production_certified: false
             } : undefined
         };
 
@@ -2903,6 +2973,10 @@ class PreflightService {
                 ...visualDiffGovNorm,
                 production_certified: false,
                 standard_certified: false
+            } : undefined,
+            proof_approval_governance: Object.keys(proofApprovalGovNorm).length > 0 ? {
+                ...proofApprovalGovNorm,
+                production_certified: false
             } : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified

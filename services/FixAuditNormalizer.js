@@ -196,6 +196,11 @@ class FixAuditNormalizer {
                 ret.visual_proof_evidence = auditData.visual_proof_evidence;
             }
 
+            // Proof Approval Governance (Phase 70)
+            if (auditData.proof_approval_governance) {
+                ret.proof_approval_governance = auditData.proof_approval_governance;
+            }
+
             // Phase 68C: sanitized validation_report artifact (hash/name/version/standard_detected only — no local paths)
             if (auditData.standards_certification_governance || auditData.validation_report_hash) {
                 const scg = auditData.standards_certification_governance || {};
@@ -229,6 +234,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.font_governance) ret.delta_report.font_governance = auditData.delta_report.font_governance;
                 if (auditData.delta_report.transparency_overprint_physical_governance) ret.delta_report.transparency_overprint_physical_governance = auditData.delta_report.transparency_overprint_physical_governance;
                 if (auditData.delta_report.visual_diff_governance) ret.delta_report.visual_diff_governance = auditData.delta_report.visual_diff_governance;
+                if (auditData.delta_report.proof_approval_governance) ret.delta_report.proof_approval_governance = auditData.delta_report.proof_approval_governance;
             }
 
             return ret;

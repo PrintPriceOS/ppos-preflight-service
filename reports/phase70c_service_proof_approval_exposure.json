@@ -1,0 +1,296 @@
+{
+  "generated_at": "2026-06-09T17:40:51.018Z",
+  "phase": "70C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "ENGINE_REPORT_AUGMENTED",
+  "core_principle": "proof_approval_governance is a production gate. proof_required=true and proof_status!=APPROVED blocks production. visual_change_detected=true and proof_status!=APPROVED blocks production. Proof artifacts must never expose raw filesystem paths. production_certified=false is always enforced on proof_approval_governance.",
+  "changes": [
+    "FixAuditNormalizer.js: proof_approval_governance preserved in v2 normalization",
+    "FixAuditNormalizer.js: delta_report.proof_approval_governance preserved",
+    "FixCapabilityContract.js: version bumped to 49.0, engine_registry_compatibility=phase-70",
+    "FixCapabilityContract.js: PROOF_APPROVAL_CONTRACT and GENERATE_PROOF_APPROVAL_METADATA capabilities added under proof_approval category",
+    "PreflightService.js: proof_approval_governance governance sources added in getJobArtifacts after visual diff block",
+    "PreflightService.js: proof_required=true+non-APPROVED and visual_change_detected=true+non-APPROVED → requiresReview=true, productionCertified=false",
+    "PreflightService.js: proof_approval_governance added to artifact_summary in getJobArtifacts",
+    "PreflightService.js: Phase 70C enforcement block added in _normalizeJobPayload after Phase 69C block",
+    "PreflightService.js: proof_approval_governance added to artifact_summary and return payload in _normalizeJobPayload"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 49.0",
+      "pass": true,
+      "notes": "version=49.0"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-70",
+      "pass": true,
+      "notes": "got: phase-70"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_PROOF_APPROVAL_METADATA capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT category=proof_approval",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT production_certified=false",
+      "pass": true,
+      "notes": "Proof approval contract must not imply production certification"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PROOF_APPROVAL_CONTRACT requires_human_review=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 69 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 68 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_approval_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_required preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_id preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "review_required preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=PENDING → govRequiresBlock=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=PENDING → productionCertified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=PENDING → requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=PENDING → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "certified.pdf must not be production-ready when proof is pending"
+    },
+    {
+      "scenario": "proof_status=APPROVED → govRequiresBlock=false",
+      "pass": true,
+      "notes": "visual_change_detected=true but proof_status=APPROVED should not block"
+    },
+    {
+      "scenario": "proof_status=REJECTED → govRequiresBlock=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=REJECTED → productionCertified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_status=REJECTED → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "NOT_REQUIRED → govRequiresBlock=false",
+      "pass": true,
+      "notes": "proof_required=false, visual_change_detected=false should not block production"
+    },
+    {
+      "scenario": "no proof_approval_governance → undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no proof_approval_governance → govRequiresBlock=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no proof_approval_governance → production_certified not downgraded",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.proof_approval_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.proof_approval_governance.proof_status preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.proof_approval_governance populated",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.proof_approval_governance.production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.proof_approval_governance.proof_status preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.proof_approval_governance.proof_id preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_approval_governance contains no local filesystem paths",
+      "pass": true,
+      "notes": "No local paths found in governance payload"
+    },
+    {
+      "scenario": "proof_id is opaque identifier, not path",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence hashes are present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof approval path → production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof approval path → requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof approval path → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 70B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No proof_approval_governance scenario claims production_certified=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_required=true + non-APPROVED status always blocks production",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "v2 without proof_approval_governance → proof_approval_governance=undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff_governance still preserved alongside proof_approval_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff_governance.visual_change_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_approval_governance.proof_status preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA still present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA required_evidence_fields includes validation_report_hash",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 54,
+    "passed": 54,
+    "failed": 0
+  }
+}

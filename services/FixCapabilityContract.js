@@ -2,9 +2,9 @@ class FixCapabilityContract {
     static getCapabilities() {
         return {
             ok: true,
-            version: "48.0",
+            version: "49.0",
             source: "SERVICE_MIRROR",
-            engine_registry_compatibility: "phase-69",
+            engine_registry_compatibility: "phase-70",
             capabilities: [
                 {
                     fix_id: "REBUILD_TRIMBOX",
@@ -1493,6 +1493,49 @@ class FixCapabilityContract {
                     supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
                     customer_message: "Generates a visual change summary for review.",
                     operator_message: "Summarizes per-page visual differences. Evidence only — human review required for visually sensitive fixes."
+                },
+                // Phase 70: Proof Approval Contract
+                {
+                    fix_id: "PROOF_APPROVAL_CONTRACT",
+                    label: "Proof Approval Contract",
+                    category: "proof_approval",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    proof_approval: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Proof approval is required before production when visual changes were detected.",
+                    operator_message: "Proof approval contract. Production blocked until proof status=APPROVED when visual changes exist or proof_required=true."
+                },
+                {
+                    fix_id: "GENERATE_PROOF_APPROVAL_METADATA",
+                    label: "Generate Proof Approval Metadata",
+                    category: "proof_approval",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    proof_approval: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Generates stable proof metadata for downstream approval workflow.",
+                    operator_message: "Emits proof_id, artifact hashes, and diff_report_hash for proof approval lifecycle. Evidence generation only — never certifies output."
                 }
             ],
             policy_modes: [
