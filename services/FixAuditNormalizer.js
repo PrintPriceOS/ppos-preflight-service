@@ -181,6 +181,11 @@ class FixAuditNormalizer {
                 ret.font_governance = auditData.font_governance;
             }
 
+            // Transparency / Overprint Physical Governance (Phase 67)
+            if (auditData.transparency_overprint_physical_governance) {
+                ret.transparency_overprint_physical_governance = auditData.transparency_overprint_physical_governance;
+            }
+
             if (auditData.delta_report) {
                 ret.delta_report = ret.delta_report || {};
                 if (auditData.delta_report.color_governance) ret.delta_report.color_governance = auditData.delta_report.color_governance;
@@ -194,6 +199,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.ink_governance) ret.delta_report.ink_governance = auditData.delta_report.ink_governance;
                 if (auditData.delta_report.selective_image_governance) ret.delta_report.selective_image_governance = auditData.delta_report.selective_image_governance;
                 if (auditData.delta_report.font_governance) ret.delta_report.font_governance = auditData.delta_report.font_governance;
+                if (auditData.delta_report.transparency_overprint_physical_governance) ret.delta_report.transparency_overprint_physical_governance = auditData.delta_report.transparency_overprint_physical_governance;
             }
 
             return ret;

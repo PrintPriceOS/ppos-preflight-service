@@ -1590,6 +1590,35 @@ class PreflightService {
             }
         }
 
+        const transparencyOverprintPhysicalGovSources = [
+            fixAuditData?.transparency_overprint_physical_governance,
+            fixAuditData?.delta_report?.transparency_overprint_physical_governance,
+            res.fix_summary?.transparency_overprint_physical_governance,
+            deltaReportData?.transparency_overprint_physical_governance,
+            res.delta_report?.transparency_overprint_physical_governance,
+            res.delta_summary?.transparency_overprint_physical_governance,
+        ];
+
+        let transparencyOverprintPhysicalGovActive = false;
+        let transparencyOverprintPhysicalCertPdfAllowed = true;
+        for (const src of transparencyOverprintPhysicalGovSources) {
+            if (src) {
+                if (src.review_required === true) transparencyOverprintPhysicalGovActive = true;
+                if (src.certified_pdf_allowed === false) transparencyOverprintPhysicalCertPdfAllowed = false;
+                if (src.production_certified === false) transparencyOverprintPhysicalGovActive = true;
+                if (src.physical_flatten_applied === true) transparencyOverprintPhysicalGovActive = true;
+                if (src.visual_change_expected === true) transparencyOverprintPhysicalGovActive = true;
+                if (src.review_required_reasons && src.review_required_reasons.length > 0) transparencyOverprintPhysicalGovActive = true;
+            }
+        }
+
+        if (transparencyOverprintPhysicalGovActive || transparencyOverprintPhysicalCertPdfAllowed === false) {
+            productionCertified = false;
+            if (transparencyOverprintPhysicalGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2585,6 +2614,39 @@ class PreflightService {
             }
         }
 
+        // Phase 67C: Transparency / Overprint Physical Governance Enforcement
+        // Physical flattens (transparency, overprint, blend modes) are always review-required.
+        // artifact_trust is the final authority but physical governance always degrades.
+        const transparencyOverprintPhysicalGov = res?.transparency_overprint_physical_governance || res?.fix_summary?.transparency_overprint_physical_governance || {};
+
+        const topPhysicalGovRequiresBlock = Object.keys(transparencyOverprintPhysicalGov).length > 0 && (
+            transparencyOverprintPhysicalGov.production_certified === false ||
+            transparencyOverprintPhysicalGov.certified_pdf_allowed === false ||
+            transparencyOverprintPhysicalGov.physical_flatten_applied === true ||
+            transparencyOverprintPhysicalGov.visual_change_expected === true
+        );
+
+        if (!atExplicitlyAllowsProduction && topPhysicalGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && transparencyOverprintPhysicalGov.review_required === true) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (topPhysicalGovRequiresBlock && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         // Phase 66C: Font Governance Enforcement
         // artifact_trust is the final authority — font_governance informs/degrades but does not
         // override explicit artifact_trust allowances.
@@ -2694,7 +2756,8 @@ class PreflightService {
             security_interactivity_governance: Object.keys(securityInteractivityGov).length > 0 ? securityInteractivityGov : undefined,
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
-            font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined
+            font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
+            transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined
         };
 
         return {
@@ -2739,6 +2802,7 @@ class PreflightService {
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
             font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
+            transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
