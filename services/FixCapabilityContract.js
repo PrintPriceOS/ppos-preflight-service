@@ -2,9 +2,9 @@ class FixCapabilityContract {
     static getCapabilities() {
         return {
             ok: true,
-            version: "46.0",
+            version: "47.0",
             source: "SERVICE_MIRROR",
-            engine_registry_compatibility: "phase-44",
+            engine_registry_compatibility: "phase-68",
             capabilities: [
                 {
                     fix_id: "REBUILD_TRIMBOX",
@@ -593,10 +593,11 @@ class FixCapabilityContract {
                     customer_message: "PDF/X transparency-safe conversion is not implemented or validated.",
                     operator_message: "Does not claim PDF/X compliance."
                 },
+                // Phase 68: Real PDF/X / PDF/A Validator Integration
                 {
                     fix_id: "VALIDATE_PDFX",
                     label: "Validate PDF/X",
-                    category: "compliance",
+                    category: "standards_certification",
                     implemented: false,
                     detectable: true,
                     autofixable: false,
@@ -608,15 +609,17 @@ class FixCapabilityContract {
                     validator_available: false,
                     compliance_claim_allowed: false,
                     standard_claimed: null,
+                    evidence_required: true,
+                    required_evidence_fields: ["validation_performed", "validation_passed", "validator_name", "validator_version", "standard_detected", "validation_report_hash", "compliance_claim_allowed"],
                     toolchain: [],
                     supported_modes: ["EXPERIMENTAL"],
-                    customer_message: "Validates PDF/X compliance.",
-                    operator_message: "PDF/X compliance check (Unsupported). Must not claim PDF/X compliance without real validator."
+                    customer_message: "Validates PDF/X compliance. Requires real validator evidence before any compliance claim.",
+                    operator_message: "PDF/X validation (Phase 68). Compliance claim only allowed when all 7 evidence fields present including validation_report_hash."
                 },
                 {
                     fix_id: "VALIDATE_PDFA",
                     label: "Validate PDF/A",
-                    category: "compliance",
+                    category: "standards_certification",
                     implemented: false,
                     detectable: true,
                     autofixable: false,
@@ -628,10 +631,56 @@ class FixCapabilityContract {
                     validator_available: false,
                     compliance_claim_allowed: false,
                     standard_claimed: null,
+                    evidence_required: true,
+                    required_evidence_fields: ["validation_performed", "validation_passed", "validator_name", "validator_version", "standard_detected", "validation_report_hash", "compliance_claim_allowed"],
                     toolchain: [],
                     supported_modes: ["EXPERIMENTAL"],
-                    customer_message: "Validates PDF/A compliance.",
-                    operator_message: "PDF/A compliance check (Unsupported). Must not claim PDF/A compliance without real validator."
+                    customer_message: "Validates PDF/A compliance. Requires real validator evidence before any compliance claim.",
+                    operator_message: "PDF/A validation (Phase 68). Compliance claim only allowed when all 7 evidence fields present including validation_report_hash."
+                },
+                {
+                    fix_id: "CONVERT_TO_PDFX_VALIDATED",
+                    label: "Convert to PDF/X (Validator-Backed)",
+                    category: "standards_certification",
+                    implemented: false,
+                    detectable: true,
+                    autofixable: false,
+                    risk_level: "HIGH",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: true,
+                    validator_required: true,
+                    validator_available: false,
+                    compliance_claim_allowed: false,
+                    standard_claimed: null,
+                    evidence_required: true,
+                    required_evidence_fields: ["validation_performed", "validation_passed", "validator_name", "validator_version", "standard_detected", "validation_report_hash", "compliance_claim_allowed"],
+                    toolchain: [],
+                    supported_modes: ["EXPERIMENTAL"],
+                    customer_message: "Converts to PDF/X with validator-backed evidence. Scaffolded — not yet available.",
+                    operator_message: "SKIPPED_UNSUPPORTED. Compliance claim only when all 7 evidence fields present."
+                },
+                {
+                    fix_id: "CONVERT_TO_PDFA_VALIDATED",
+                    label: "Convert to PDF/A (Validator-Backed)",
+                    category: "standards_certification",
+                    implemented: false,
+                    detectable: true,
+                    autofixable: false,
+                    risk_level: "HIGH",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: true,
+                    validator_required: true,
+                    validator_available: false,
+                    compliance_claim_allowed: false,
+                    standard_claimed: null,
+                    evidence_required: true,
+                    required_evidence_fields: ["validation_performed", "validation_passed", "validator_name", "validator_version", "standard_detected", "validation_report_hash", "compliance_claim_allowed"],
+                    toolchain: [],
+                    supported_modes: ["EXPERIMENTAL"],
+                    customer_message: "Converts to PDF/A with validator-backed evidence. Scaffolded — not yet available.",
+                    operator_message: "SKIPPED_UNSUPPORTED. Compliance claim only when all 7 evidence fields present."
                 },
                 {
                     fix_id: "GENERATE_PDFX",

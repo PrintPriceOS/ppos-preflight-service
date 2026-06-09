@@ -41,10 +41,12 @@ class FixAuditNormalizer {
                         validator_available: fix.validator_available,
                         compliance_claim_allowed: fix.compliance_claim_allowed,
                         standard_claimed: fix.standard_claimed,
+                        standard_detected: fix.standard_detected,
                         validation_performed: fix.validation_performed,
                         validation_passed: fix.validation_passed,
                         validator_name: fix.validator_name,
                         validator_version: fix.validator_version,
+                        validation_report_hash: fix.validation_report_hash,
                         pages_processed: fix.pages_processed,
                         page_boxes_before: fix.page_boxes_before,
                         page_boxes_after: fix.page_boxes_after,
@@ -184,6 +186,24 @@ class FixAuditNormalizer {
             // Transparency / Overprint Physical Governance (Phase 67)
             if (auditData.transparency_overprint_physical_governance) {
                 ret.transparency_overprint_physical_governance = auditData.transparency_overprint_physical_governance;
+            }
+
+            // Phase 68C: sanitized validation_report artifact (hash/name/version/standard_detected only — no local paths)
+            if (auditData.standards_certification_governance || auditData.validation_report_hash) {
+                const scg = auditData.standards_certification_governance || {};
+                const hash = scg.validation_report_hash || auditData.validation_report_hash;
+                const name = scg.validator_name || auditData.validator_name;
+                const version = scg.validator_version || auditData.validator_version;
+                const detected = scg.standard_detected || auditData.standard_detected;
+                if (hash || name || version || detected) {
+                    ret.validation_report_sanitized = {
+                        validation_report_hash: hash || null,
+                        validator_name: name || null,
+                        validator_version: version || null,
+                        standard_detected: detected || null,
+                        source: 'standards_certification_governance'
+                    };
+                }
             }
 
             if (auditData.delta_report) {

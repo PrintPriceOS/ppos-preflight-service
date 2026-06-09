@@ -2335,13 +2335,13 @@ class PreflightService {
             validator_available = false;
         }
 
-        const hasValidEvidence = validation_performed && validation_passed && 
-                                 (evidenceSrc.validator_name || res.validator_name || standardsGov.validator_name) && 
+        // Phase 68C: validation_report_hash is the canonical 7th evidence field.
+        // compliance_claim_allowed=true requires all 7 fields present (Phase 68B policy).
+        const hasValidEvidence = validation_performed && validation_passed &&
+                                 (evidenceSrc.validator_name || res.validator_name || standardsGov.validator_name) &&
                                  (evidenceSrc.validator_version || res.validator_version || standardsGov.validator_version) &&
                                  (evidenceSrc.standard_detected || res.standard_detected || standardsGov.standard_detected) &&
-                                 ((evidenceSrc.validation_report_available || res.validation_report_available || standardsGov.validation_report_available) || 
-                                  (evidenceSrc.validation_report_hash || res.validation_report_hash || standardsGov.validation_report_hash) ||
-                                  (evidenceSrc.validation_report_path || res.validation_report_path || standardsGov.validation_report_path));
+                                 (evidenceSrc.validation_report_hash || res.validation_report_hash || standardsGov.validation_report_hash);
 
         const isClaimingCompliance = rootArtifactTrust.standard_certified || rootArtifactTrust.pdfx_compliance_claimed || res.pdfx_compliance_claimed || res.pdfa_compliance_claimed || res.standard_certified || compliance_claim_allowed || res.standard_claimed || standardsGov.pdfx_compliance_claimed || standardsGov.standard_certified;
 
@@ -2757,7 +2757,8 @@ class PreflightService {
             ink_governance: Object.keys(inkGov).length > 0 ? inkGov : undefined,
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
             font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
-            transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined
+            transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined,
+            standards_certification_governance: Object.keys(standardsGov).length > 0 ? standardsGov : undefined
         };
 
         return {
@@ -2788,6 +2789,22 @@ class PreflightService {
             pdfa_compliance_claimed: rootArtifactTrust.pdfa_compliance_claimed !== undefined ? rootArtifactTrust.pdfa_compliance_claimed : (normalizedResult.pdfa_compliance_claimed !== undefined ? normalizedResult.pdfa_compliance_claimed : standardsGov.pdfa_compliance_claimed),
             compliance_claim_allowed: rootArtifactTrust.compliance_claim_allowed !== undefined ? rootArtifactTrust.compliance_claim_allowed : (normalizedResult.compliance_claim_allowed !== undefined ? normalizedResult.compliance_claim_allowed : standardsGov.compliance_claim_allowed),
             standards_certification_governance: normalizedResult.standards_certification_governance || standardsGov,
+            // Phase 68C: expose sanitized validation_report artifact (hash/name/version/standard_detected only — no local paths)
+            validation_report: (() => {
+                const scg = normalizedResult.standards_certification_governance || standardsGov || {};
+                const hash = scg.validation_report_hash || res.validation_report_hash;
+                const name = scg.validator_name || res.validator_name;
+                const version = scg.validator_version || res.validator_version;
+                const detected = scg.standard_detected || res.standard_detected;
+                if (!hash && !name && !version && !detected) return undefined;
+                return {
+                    validation_report_hash: hash || null,
+                    validator_name: name || null,
+                    validator_version: version || null,
+                    standard_detected: detected || null,
+                    available: !!(hash && name && version && detected)
+                };
+            })(),
             policy_mode: res.policy_mode || 'SAFE',
             fix_summary: res.fix_summary || null,
             delta_summary: res.delta_summary || null,

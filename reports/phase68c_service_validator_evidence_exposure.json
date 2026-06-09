@@ -1,0 +1,314 @@
+{
+  "generated_at": "2026-06-09T02:42:44.595Z",
+  "phase": "68C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "ENGINE_REPORT",
+  "core_principle": "standard_certified=true requires all 7 canonical evidence fields (validation_performed, validation_passed, validator_name, validator_version, standard_detected, validation_report_hash, compliance_claim_allowed). validation_report_path is never exposed publicly — only hash/name/version/standard_detected.",
+  "required_evidence_fields": [
+    "validation_performed",
+    "validation_passed",
+    "validator_name",
+    "validator_version",
+    "standard_detected",
+    "validation_report_hash",
+    "compliance_claim_allowed"
+  ],
+  "changes": [
+    "FixAuditNormalizer.js: standard_detected and validation_report_hash added to preserveFixFields",
+    "FixAuditNormalizer.js: validation_report_sanitized built from standards_certification_governance (hash/name/version/standard_detected only)",
+    "FixCapabilityContract.js: version bumped to 47.0, engine_registry_compatibility=phase-68",
+    "FixCapabilityContract.js: VALIDATE_PDFX and VALIDATE_PDFA updated with required_evidence_fields and category=standards_certification",
+    "FixCapabilityContract.js: CONVERT_TO_PDFX_VALIDATED and CONVERT_TO_PDFA_VALIDATED added",
+    "PreflightService.js: hasValidEvidence tightened — requires validation_report_hash specifically (not validation_report_available or validation_report_path)",
+    "PreflightService.js: validation_report sanitized artifact exposed in return value (hash/name/version/standard_detected, no paths)",
+    "PreflightService.js: artifact_summary.standards_certification_governance added"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 47.0",
+      "pass": true,
+      "notes": "version=47.0"
+    },
+    {
+      "scenario": "VALIDATE_PDFX capability present",
+      "pass": true,
+      "notes": "VALIDATE_PDFX must be registered"
+    },
+    {
+      "scenario": "VALIDATE_PDFA capability present",
+      "pass": true,
+      "notes": "VALIDATE_PDFA must be registered"
+    },
+    {
+      "scenario": "CONVERT_TO_PDFX_VALIDATED capability present",
+      "pass": true,
+      "notes": "Phase 68 capability required"
+    },
+    {
+      "scenario": "CONVERT_TO_PDFA_VALIDATED capability present",
+      "pass": true,
+      "notes": "Phase 68 capability required"
+    },
+    {
+      "scenario": "VALIDATE_PDFA has required_evidence_fields",
+      "pass": true,
+      "notes": "Must list all 7 evidence fields including validation_report_hash"
+    },
+    {
+      "scenario": "VALIDATE_PDFX compliance_claim_allowed=false by default",
+      "pass": true,
+      "notes": "No claim without evidence"
+    },
+    {
+      "scenario": "CONVERT_TO_PDFA_VALIDATED compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_STANDARD_VALIDATION_REPORT still present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level standard_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level validation_report_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level validator_name preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level validator_version preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level validation_performed preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level validation_passed preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Fix-level compliance_claim_allowed preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standards_certification_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report_sanitized built in normalizer",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Complete 7-field evidence → hasValidEvidence=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Complete 7-field evidence → no overclaim rejection",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Complete 7-field evidence → validation_report artifact exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report.available=true when all fields present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report has no validation_report_path",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Missing validation_report_hash → hasValidEvidence=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Missing validation_report_hash → overclaim detected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_passed=false → hasValidEvidence=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_passed=false → overclaim detected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No evidence → hasValidEvidence=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No evidence → isClaimingCompliance=false (no claim to reject)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No evidence → standard_certified_final=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No evidence → validation_report.available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "False claim without evidence → overclaim=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "False claim rejected → standard_certified_final=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report_sanitized present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report_sanitized has no validation_report_path",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report_sanitized has hash",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.standards_certification_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 68B scenarios successfully normalized",
+      "pass": true,
+      "notes": "All 20 worker scenarios must normalize without error"
+    },
+    {
+      "scenario": "No validation_report_path leaked in any scenario",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 7 evidence fields present in normalized standards_certification_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.standards_certification_governance is populated",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "False PDF/X claim without evidence → overclaim=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "False PDF/X claim → standard_certified_final=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Incomplete evidence → overclaim detected (certified.pdf must be downgraded)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Partial gov → validation_report.available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-68",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFX category=standards_certification",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA category=standards_certification",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 6 single-field-missing permutations → hasValidEvidence=false",
+      "pass": true,
+      "notes": "Every required field individually prevents valid evidence"
+    },
+    {
+      "scenario": "GENERATE_STANDARD_VALIDATION_REPORT still present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_STANDARD_VALIDATION_REPORT compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "validation_report_sanitized.source = standards_certification_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.standards_certification_governance present in normalized output",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.standards_certification_governance.review_required preserved",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 56,
+    "passed": 56,
+    "failed": 0
+  }
+}
