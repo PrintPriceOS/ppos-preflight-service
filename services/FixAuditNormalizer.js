@@ -201,6 +201,19 @@ class FixAuditNormalizer {
                 ret.proof_approval_governance = auditData.proof_approval_governance;
             }
 
+            // Heavy PDF Probe Governance (Phase 62F)
+            if (auditData.heavy_pdf_probe_governance) {
+                ret.heavy_pdf_probe_governance = auditData.heavy_pdf_probe_governance;
+            }
+            if (auditData.analysisIntegrity) {
+                ret.analysisIntegrity = auditData.analysisIntegrity;
+            }
+            if (auditData.degraded_reasons !== undefined) ret.degraded_reasons = auditData.degraded_reasons;
+            if (auditData.extractionErrors !== undefined) ret.extractionErrors = auditData.extractionErrors;
+            if (auditData.analysis_status !== undefined) ret.analysis_status = auditData.analysis_status;
+            if (auditData.certifiable !== undefined) ret.certifiable = auditData.certifiable;
+            if (auditData.strict_forensic_mode !== undefined) ret.strict_forensic_mode = auditData.strict_forensic_mode;
+
             // Phase 68C: sanitized validation_report artifact (hash/name/version/standard_detected only — no local paths)
             if (auditData.standards_certification_governance || auditData.validation_report_hash) {
                 const scg = auditData.standards_certification_governance || {};
@@ -235,6 +248,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.transparency_overprint_physical_governance) ret.delta_report.transparency_overprint_physical_governance = auditData.delta_report.transparency_overprint_physical_governance;
                 if (auditData.delta_report.visual_diff_governance) ret.delta_report.visual_diff_governance = auditData.delta_report.visual_diff_governance;
                 if (auditData.delta_report.proof_approval_governance) ret.delta_report.proof_approval_governance = auditData.delta_report.proof_approval_governance;
+                if (auditData.delta_report.heavy_pdf_probe_governance) ret.delta_report.heavy_pdf_probe_governance = auditData.delta_report.heavy_pdf_probe_governance;
             }
 
             return ret;
@@ -267,6 +281,112 @@ class FixAuditNormalizer {
             skipped_fixes: skipped,
             failed_fixes: failed,
             fix_results: auditData.fix_results || []
+        };
+    }
+
+    /**
+     * Phase 62F-C — Normalize heavy_pdf_probe_governance for safe exposure.
+     *
+     * audience: 'customer' (default) | 'operator'
+     * - customer: strips raw stderr/object identifiers/local paths, keeps only
+     *   the safe warning classes, never includes evidence.
+     * - operator: keeps full warning/fatal classes and a sanitized (path-redacted,
+     *   truncated) evidence excerpt.
+     *
+     * Always enforces the Phase 62F-C "wins" rules:
+     * - review_required=true wins (also true if fatal_document_failure=true)
+     * - production_certified / standard_certified / pdfx / pdfa / compliance_claim_allowed = false win
+     * - fatal_document_failure=true wins over degraded_but_usable
+     */
+    static normalizeHeavyPdfProbeGovernance(gov, audience = 'customer') {
+        if (!gov || typeof gov !== 'object' || Object.keys(gov).length === 0) return null;
+
+        const isOperator = audience === 'operator';
+
+        const SAFE_WARNING_CLASSES = [
+            'PDF_LINEARIZATION_HINT_WARNING',
+            'PDF_SHARED_OBJECT_HINT_MISMATCH',
+            'PDF_OBJECT_COUNT_HINT_MISMATCH',
+            'PDF_FONT_WEIGHT_WARNING'
+        ];
+
+        const dedupe = (arr) => Array.isArray(arr) ? [...new Set(arr)] : [];
+
+        const redactPathsAndIds = (text) => {
+            if (typeof text !== 'string') return text;
+            let out = text
+                .replace(/[A-Za-z]:[\\\/][^\s"']+/g, '[path-redacted]')
+                .replace(/\/(?:tmp|var|home|storage|opt)\/[^\s"']+/g, '[path-redacted]');
+            if (!isOperator) {
+                out = out.replace(/\b\d+\s+\d+\s+obj\b/gi, '[object-redacted]')
+                         .replace(/\bobject\s+\d+\b/gi, '[object-redacted]');
+            }
+            return out;
+        };
+
+        const truncate = (text, max) => {
+            if (typeof text !== 'string') return text;
+            return text.length > max ? `${text.slice(0, max)}... [truncated]` : text;
+        };
+
+        const tools = {};
+        for (const [toolName, toolData] of Object.entries(gov.tools || {})) {
+            if (!toolData || typeof toolData !== 'object') continue;
+            const warningClasses = dedupe(toolData.warning_classes);
+            const fatalClasses = dedupe(toolData.fatal_classes);
+
+            if (isOperator) {
+                tools[toolName] = {
+                    ...toolData,
+                    warning_classes: warningClasses,
+                    fatal_classes: fatalClasses
+                };
+            } else {
+                tools[toolName] = {
+                    semantic_status: toolData.semantic_status,
+                    severity: toolData.severity,
+                    usable_output: toolData.usable_output === true,
+                    fatal: toolData.fatal === true,
+                    warning_classes: warningClasses.filter(w => SAFE_WARNING_CLASSES.includes(w))
+                };
+            }
+        }
+
+        let evidence = {};
+        if (isOperator) {
+            for (const [key, value] of Object.entries(gov.evidence || {})) {
+                evidence[key] = typeof value === 'string'
+                    ? truncate(redactPathsAndIds(value), 500)
+                    : value;
+            }
+        }
+
+        const fatal = gov.fatal_document_failure === true;
+        const reviewRequired = gov.review_required === true || fatal;
+
+        return {
+            heavy_pdf_detected: gov.heavy_pdf_detected === true,
+            file_size_bytes: gov.file_size_bytes ?? null,
+            file_size_mb: gov.file_size_mb ?? null,
+            page_count: gov.page_count ?? null,
+            probe_semantics_applied: gov.probe_semantics_applied === true,
+            analysis_degraded: gov.analysis_degraded === true,
+            degraded_but_usable: fatal ? false : gov.degraded_but_usable === true,
+            fatal_document_failure: fatal,
+            certifiable: gov.certifiable === true,
+            review_required: reviewRequired,
+            production_certified: false,
+            standard_certified: false,
+            pdfx_compliance_claimed: false,
+            pdfa_compliance_claimed: false,
+            compliance_claim_allowed: false,
+            strict_forensic_mode: gov.strict_forensic_mode === true,
+            probe_summary: gov.probe_summary || {},
+            tools,
+            warnings: dedupe(gov.warnings),
+            review_required_reasons: dedupe(gov.review_required_reasons),
+            evidence,
+            audience
         };
     }
 }

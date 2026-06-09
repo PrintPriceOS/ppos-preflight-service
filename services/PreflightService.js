@@ -1675,6 +1675,34 @@ class PreflightService {
             requiresReview = true;
         }
 
+        // Heavy PDF Probe Governance (Phase 62F)
+        const heavyPdfProbeGovSources = [
+            fixAuditData?.heavy_pdf_probe_governance,
+            fixAuditData?.delta_report?.heavy_pdf_probe_governance,
+            res.fix_summary?.heavy_pdf_probe_governance,
+            deltaReportData?.heavy_pdf_probe_governance,
+            res.delta_report?.heavy_pdf_probe_governance,
+            res.delta_summary?.heavy_pdf_probe_governance,
+            res.heavy_pdf_probe_governance,
+        ];
+
+        let resolvedHeavyPdfProbeGov = null;
+        for (const src of heavyPdfProbeGovSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedHeavyPdfProbeGov = src;
+                break;
+            }
+        }
+
+        if (resolvedHeavyPdfProbeGov) {
+            if (resolvedHeavyPdfProbeGov.review_required === true || resolvedHeavyPdfProbeGov.fatal_document_failure === true) {
+                requiresReview = true;
+            }
+            if (resolvedHeavyPdfProbeGov.production_certified === false || resolvedHeavyPdfProbeGov.fatal_document_failure === true) {
+                productionCertified = false;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1904,6 +1932,13 @@ class PreflightService {
                     production_certified: false,
                     evidence: resolvedProofApprovalGov.evidence || {}
                 };
+            }
+
+            if (resolvedHeavyPdfProbeGov) {
+                artifact_summary.heavy_pdf_probe_governance = FixAuditNormalizer.normalizeHeavyPdfProbeGovernance(resolvedHeavyPdfProbeGov, 'customer');
+                if (artifact_summary.heavy_pdf_probe_governance.review_required) {
+                    artifact_summary.production_ready_artifact_available = false;
+                }
             }
 
             return {
@@ -2787,6 +2822,46 @@ class PreflightService {
             }
         }
 
+        // Phase 62F-C: Heavy PDF Probe Governance Enforcement
+        // heavy_pdf_probe_governance explains analysis quality. It does not certify the
+        // PDF and never overrides artifact_trust in the "allow" direction — it can only
+        // degrade. fatal_document_failure=true wins over degraded_but_usable.
+        const heavyPdfProbeGovNorm = res?.heavy_pdf_probe_governance
+            || res?.fix_summary?.heavy_pdf_probe_governance
+            || res?.delta_report?.heavy_pdf_probe_governance
+            || {};
+
+        const heavyPdfProbeGovRequiresBlock = Object.keys(heavyPdfProbeGovNorm).length > 0 && (
+            heavyPdfProbeGovNorm.production_certified === false ||
+            heavyPdfProbeGovNorm.fatal_document_failure === true ||
+            heavyPdfProbeGovNorm.review_required === true ||
+            heavyPdfProbeGovNorm.analysis_degraded === true
+        );
+
+        if (!atExplicitlyAllowsProduction && heavyPdfProbeGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && (heavyPdfProbeGovNorm.review_required === true || heavyPdfProbeGovNorm.fatal_document_failure === true)) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (heavyPdfProbeGovRequiresBlock && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.pdfx_compliance_claimed = false;
+            normalizedResult.pdfa_compliance_claimed = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.pdfx_compliance_claimed = false;
+                rootArtifactTrust.pdfa_compliance_claimed = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
+        const heavyPdfProbeGovCustomer = FixAuditNormalizer.normalizeHeavyPdfProbeGovernance(heavyPdfProbeGovNorm, 'customer');
+        const heavyPdfProbeGovOperator = FixAuditNormalizer.normalizeHeavyPdfProbeGovernance(heavyPdfProbeGovNorm, 'operator');
+
         // Phase 66C: Font Governance Enforcement
         // artifact_trust is the final authority — font_governance informs/degrades but does not
         // override explicit artifact_trust allowances.
@@ -2907,7 +2982,8 @@ class PreflightService {
             proof_approval_governance: Object.keys(proofApprovalGovNorm).length > 0 ? {
                 ...proofApprovalGovNorm,
                 production_certified: false
-            } : undefined
+            } : undefined,
+            heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined
         };
 
         return {
@@ -2978,6 +3054,8 @@ class PreflightService {
                 ...proofApprovalGovNorm,
                 production_certified: false
             } : undefined,
+            heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
+            heavy_pdf_probe_governance_operator: heavyPdfProbeGovOperator || undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };

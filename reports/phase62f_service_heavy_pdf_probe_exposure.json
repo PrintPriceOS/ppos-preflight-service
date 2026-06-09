@@ -1,0 +1,351 @@
+{
+  "generated_at": "2026-06-09T23:15:24.648Z",
+  "phase": "62F-C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "ENGINE_62F_REPORT_AUGMENTED",
+  "core_principle": "heavy_pdf_probe_governance explains analysis quality. It does not certify the PDF, does not override artifact_trust, and does not allow production by itself. review_required=true and fatal_document_failure=true always degrade; they never upgrade certification. Customer payloads never see raw stderr, local paths, or object IDs; only safe warning classes are preserved.",
+  "changes": [
+    "FixAuditNormalizer.js: heavy_pdf_probe_governance preserved at root and in delta_report",
+    "FixAuditNormalizer.js: analysisIntegrity, degraded_reasons, extractionErrors, analysis_status, certifiable, strict_forensic_mode preserved",
+    "FixAuditNormalizer.js: new normalizeHeavyPdfProbeGovernance(gov, audience) helper for customer/operator sanitization",
+    "FixCapabilityContract.js: version bumped to 50.0",
+    "FixCapabilityContract.js: HEAVY_PDF_PROBE_SEMANTICS, QPDF_WARNING_CLASSIFICATION, PDFIMAGES_WARNING_CLASSIFICATION capabilities added under heavy_pdf_probe category (analysis capabilities, not fixes)",
+    "PreflightService.js: getJobArtifacts resolves heavy_pdf_probe_governance from fix_audit/delta_report sources, applies review_required/fatal wins to productionCertified/requiresReview",
+    "PreflightService.js: artifact_summary.heavy_pdf_probe_governance exposed (customer-sanitized), downgrades production_ready_artifact_available when review required",
+    "PreflightService.js: _normalizeJobPayload Phase 62F-C enforcement block added after Phase 70C block",
+    "PreflightService.js: heavy_pdf_probe_governance (customer) and heavy_pdf_probe_governance_operator (operator) exposed in artifact_summary and root payload"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 50.0",
+      "pass": true,
+      "notes": "version=50.0"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "QPDF_WARNING_CLASSIFICATION capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PDFIMAGES_WARNING_CLASSIFICATION capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS category=heavy_pdf_probe",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "HEAVY_PDF_PROBE_SEMANTICS not exposed as a fix (analysis_capability=true, autofixable=false)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 70 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "heavy_pdf_probe_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "qpdf semantic_status=WARNING_ONLY preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "qpdf not classified as fatal",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "WARNING_ONLY → review_required=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "WARNING_ONLY → production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "WARNING_ONLY → fatal_document_failure=false preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "pdfimages semantic_status=WARNING_ONLY preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "pdfimages not classified as fatal",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PDF_FONT_WEIGHT_WARNING preserved in customer view (safe class)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "FAILED_FATAL preserved as fatal",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fatal_document_failure=true → degraded_but_usable forced false",
+      "pass": true,
+      "notes": "fatal wins over degraded_but_usable"
+    },
+    {
+      "scenario": "fatal_document_failure=true → review_required=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fatal_document_failure=true → production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fatal_document_failure=true → certified.pdf not allowed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "degraded_but_usable=true preserved (not fatal)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "degraded_but_usable=true → review_required=true (review route, not auto-fail)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "degraded_but_usable=true → production_certified=false (no auto-certify)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload has no evidence field content",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload contains no local filesystem paths",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload contains no raw object IDs",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload preserves raw_status",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload preserves all warning_classes",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload includes evidence excerpt",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload has more detail than customer payload",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "review_required=true → certified.pdf downgraded (certifiedPdfAllowed=false)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "review_required=true → production_certified=false even if artifact_trust said true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "review_required=true → standard_certified=false even if artifact_trust said true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer: production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer: standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer: pdfx_compliance_claimed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer: pdfa_compliance_claimed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer: compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator: production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator: compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "raw transcript exceeds 500 chars (sanity check)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "customer payload contains no evidence at all",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload truncates huge transcript",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload truncation marker present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "operator payload redacts local paths from transcript",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "legacy payload normalizes without error",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "legacy payload heavy_pdf_probe_governance=undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "normalizeHeavyPdfProbeGovernance(undefined) returns null",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "normalizeHeavyPdfProbeGovernance({}) returns null",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "legacy payload → no heavy PDF block",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "legacy payload → production_certified unchanged (true)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.heavy_pdf_probe_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.heavy_pdf_probe_governance.review_required preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 62F-B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No heavy_pdf_probe_governance scenario overclaims production/standards",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fatal_document_failure=true always blocks production end-to-end",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 65,
+    "passed": 65,
+    "failed": 0
+  }
+}
