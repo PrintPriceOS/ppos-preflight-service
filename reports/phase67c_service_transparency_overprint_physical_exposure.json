@@ -1,0 +1,133 @@
+{
+  "timestamp": "2026-06-09T01:37:29.526Z",
+  "phase": "67C",
+  "repo": "ppos-preflight-service",
+  "input_mode": "WORKER_REPORT",
+  "scenarios": [
+    {
+      "name": "Capability Contract Regression — transparency_overprint_physical_governance capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: FLATTEN_TRANSPARENCY skipped unsupported",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: NORMALIZE_BLEND_MODES skipped unsupported",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: FLATTEN_OVERPRINT skipped unsupported",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: SIMULATE_OVERPRINT_PREVIEW skipped unsupported",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: mixed physical fixes all skipped",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: SYNTHETIC: clean control no action",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: physical flatten APPLIED must force FIXED_REVIEW_REQUIRED",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: rendering_safety_proven must never leak as true",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: visual_change_expected must be preserved from evidence",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: standards overclaim from physical fix must be rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS"
+    }
+  ],
+  "passed": 12,
+  "failed": 0,
+  "smoke_passed": true,
+  "results": [
+    {
+      "scenario": "Capability Contract Regression — transparency_overprint_physical_governance capabilities",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: FLATTEN_TRANSPARENCY skipped unsupported",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: NORMALIZE_BLEND_MODES skipped unsupported",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: FLATTEN_OVERPRINT skipped unsupported",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: SIMULATE_OVERPRINT_PREVIEW skipped unsupported",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: mixed physical fixes all skipped",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: SYNTHETIC: clean control no action",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: physical flatten APPLIED must force FIXED_REVIEW_REQUIRED",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: rendering_safety_proven must never leak as true",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: visual_change_expected must be preserved from evidence",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: standards overclaim from physical fix must be rejected",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Worker scenario passthrough: REGRESSION: evidence preservation across applied/skipped/failed buckets",
+      "status": "PASS",
+      "pass": true,
+      "notes": "OK"
+    }
+  ]
+}
