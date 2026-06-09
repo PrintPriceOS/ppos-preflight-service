@@ -188,6 +188,14 @@ class FixAuditNormalizer {
                 ret.transparency_overprint_physical_governance = auditData.transparency_overprint_physical_governance;
             }
 
+            // Visual Diff Governance (Phase 69)
+            if (auditData.visual_diff_governance) {
+                ret.visual_diff_governance = auditData.visual_diff_governance;
+            }
+            if (auditData.visual_proof_evidence) {
+                ret.visual_proof_evidence = auditData.visual_proof_evidence;
+            }
+
             // Phase 68C: sanitized validation_report artifact (hash/name/version/standard_detected only — no local paths)
             if (auditData.standards_certification_governance || auditData.validation_report_hash) {
                 const scg = auditData.standards_certification_governance || {};
@@ -220,6 +228,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.selective_image_governance) ret.delta_report.selective_image_governance = auditData.delta_report.selective_image_governance;
                 if (auditData.delta_report.font_governance) ret.delta_report.font_governance = auditData.delta_report.font_governance;
                 if (auditData.delta_report.transparency_overprint_physical_governance) ret.delta_report.transparency_overprint_physical_governance = auditData.delta_report.transparency_overprint_physical_governance;
+                if (auditData.delta_report.visual_diff_governance) ret.delta_report.visual_diff_governance = auditData.delta_report.visual_diff_governance;
             }
 
             return ret;

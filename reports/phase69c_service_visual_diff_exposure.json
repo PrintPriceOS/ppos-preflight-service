@@ -1,0 +1,331 @@
+{
+  "generated_at": "2026-06-09T15:27:47.542Z",
+  "phase": "69C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "ENGINE_REPORT",
+  "core_principle": "visual_diff_governance is evidence — not certification. visual_change_detected=true or visual_review_required=true must block certified.pdf. proof artifacts must never expose local paths. production_certified=false and standard_certified=false are always enforced on visual_diff_governance.",
+  "changes": [
+    "FixAuditNormalizer.js: visual_diff_governance and visual_proof_evidence preserved in v2 normalization",
+    "FixAuditNormalizer.js: delta_report.visual_diff_governance preserved",
+    "FixCapabilityContract.js: version bumped to 48.0, engine_registry_compatibility=phase-69",
+    "FixCapabilityContract.js: RENDER_PDF_PAGES, GENERATE_VISUAL_DIFF, GENERATE_PROOF_THUMBNAILS, COMPARE_ORIGINAL_TO_FIXED, GENERATE_VISUAL_CHANGE_REPORT added under visual_proofing category",
+    "PreflightService.js: visual_diff_governance governance sources added after transparency_overprint_physical block",
+    "PreflightService.js: visual_review_required/visual_change_detected → requiresReview=true, productionCertified=false",
+    "PreflightService.js: certified.pdf downgraded when visual_review_required=true (via requiresReview gate)",
+    "PreflightService.js: visual_diff_governance added to artifact_summary in getJobArtifacts",
+    "PreflightService.js: visual_diff_governance added to artifact_summary and return payload in _normalizeJobPayload"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 48.0",
+      "pass": true,
+      "notes": "version=48.0"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-69",
+      "pass": true,
+      "notes": "got: phase-69"
+    },
+    {
+      "scenario": "RENDER_PDF_PAGES capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_DIFF capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_PROOF_THUMBNAILS capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "COMPARE_ORIGINAL_TO_FIXED capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_CHANGE_REPORT capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_DIFF category=visual_proofing",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_DIFF production_certified=false",
+      "pass": true,
+      "notes": "Visual diff must not imply production certification"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_DIFF standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_VISUAL_DIFF compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 68 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_review_required preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "max_changed_pixel_ratio preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_artifacts_available preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "warnings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected=true → govRequiresBlock=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected=true → productionCertified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected=true → requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_change_detected=true → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "certified.pdf must not be production-ready when visual changes exist"
+    },
+    {
+      "scenario": "visual_review_required=true → requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_review_required=true → productionCertified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_review_required=true → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "render_tool_gap=true preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_artifacts_available=false preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "tool gap → visual_review_required still drives downgrade",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "tool gap → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no visual_diff_governance → undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no visual_diff_governance → govRequiresBlock=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no visual_diff_governance → production_certified not downgraded",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff_governance preserved even with no flags set",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.visual_diff_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.visual_diff_governance.visual_change_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "render_performed evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "diff_performed evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "pages_rendered evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "render_tool evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "diff_images evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "thumbnails evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "changed_pixel_ratio_avg preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 69B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "No visual_diff_governance scenario claims production_certified=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_review_required=true always blocks certified.pdf",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.visual_diff_governance populated",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.visual_diff_governance.production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.visual_diff_governance.standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_summary.visual_diff_governance.visual_change_detected preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff path → production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff path → requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff path → certifiedPdfAllowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_proof_evidence preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "thumbnails array preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "render_tool preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA still present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA required_evidence_fields includes validation_report_hash",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 61,
+    "passed": 61,
+    "failed": 0
+  }
+}

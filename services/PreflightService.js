@@ -1619,6 +1619,36 @@ class PreflightService {
             }
         }
 
+        // Visual Diff Governance (Phase 69)
+        const visualDiffGovSources = [
+            fixAuditData?.visual_diff_governance,
+            fixAuditData?.delta_report?.visual_diff_governance,
+            res.fix_summary?.visual_diff_governance,
+            deltaReportData?.visual_diff_governance,
+            res.delta_report?.visual_diff_governance,
+            res.delta_summary?.visual_diff_governance,
+        ];
+
+        let visualDiffGovActive = false;
+        let visualDiffCertPdfAllowed = true;
+        let resolvedVisualDiffGov = null;
+        for (const src of visualDiffGovSources) {
+            if (src) {
+                if (!resolvedVisualDiffGov) resolvedVisualDiffGov = src;
+                if (src.visual_review_required === true) { visualDiffGovActive = true; visualDiffCertPdfAllowed = false; }
+                if (src.visual_change_detected === true) visualDiffGovActive = true;
+                if (src.production_certified === false) visualDiffGovActive = true;
+                if (src.render_tool_gap === true) visualDiffGovActive = true;
+            }
+        }
+
+        if (visualDiffGovActive || visualDiffCertPdfAllowed === false) {
+            productionCertified = false;
+            if (visualDiffGovActive) {
+                requiresReview = true;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1820,6 +1850,22 @@ class PreflightService {
                 production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
                 review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable)
             };
+
+            if (resolvedVisualDiffGov) {
+                artifact_summary.visual_diff_governance = {
+                    visual_diff_required: resolvedVisualDiffGov.visual_diff_required ?? false,
+                    visual_diff_performed: resolvedVisualDiffGov.visual_diff_performed ?? false,
+                    visual_change_detected: resolvedVisualDiffGov.visual_change_detected ?? false,
+                    visual_review_required: resolvedVisualDiffGov.visual_review_required ?? false,
+                    render_tool_gap: resolvedVisualDiffGov.render_tool_gap ?? false,
+                    max_changed_pixel_ratio: resolvedVisualDiffGov.max_changed_pixel_ratio ?? 0,
+                    proof_artifacts_available: resolvedVisualDiffGov.proof_artifacts_available ?? false,
+                    production_certified: false,
+                    standard_certified: false,
+                    warnings: resolvedVisualDiffGov.warnings || [],
+                    evidence: resolvedVisualDiffGov.evidence || {}
+                };
+            }
 
             return {
                 ok: true,
@@ -2647,6 +2693,34 @@ class PreflightService {
             }
         }
 
+        // Phase 69C: Visual Diff Governance Enforcement
+        // visual_diff_governance signals that a visually sensitive fix was applied.
+        // visual_review_required=true or visual_change_detected=true blocks certified.pdf.
+        const visualDiffGovNorm = res?.visual_diff_governance || res?.fix_summary?.visual_diff_governance || {};
+
+        const visualDiffGovRequiresBlock = Object.keys(visualDiffGovNorm).length > 0 && (
+            visualDiffGovNorm.production_certified === false ||
+            visualDiffGovNorm.visual_review_required === true ||
+            visualDiffGovNorm.visual_change_detected === true
+        );
+
+        if (!atExplicitlyAllowsProduction && visualDiffGovRequiresBlock) {
+            productionCertified = false;
+            normalizedResult.productionCertified = false;
+        }
+        if (!atExplicitlyNoReview && (visualDiffGovNorm.visual_review_required === true || visualDiffGovNorm.visual_change_detected === true)) {
+            requiresReview = true;
+            normalizedResult.requiresHumanReview = true;
+        }
+        if (visualDiffGovRequiresBlock && !atExplicitlyAllowsProduction) {
+            normalizedResult.standard_certified = false;
+            normalizedResult.compliance_claim_allowed = false;
+            if (rootArtifactTrust && Object.keys(rootArtifactTrust).length > 0) {
+                rootArtifactTrust.standard_certified = false;
+                rootArtifactTrust.compliance_claim_allowed = false;
+            }
+        }
+
         // Phase 66C: Font Governance Enforcement
         // artifact_trust is the final authority — font_governance informs/degrades but does not
         // override explicit artifact_trust allowances.
@@ -2758,7 +2832,12 @@ class PreflightService {
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
             font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
             transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined,
-            standards_certification_governance: Object.keys(standardsGov).length > 0 ? standardsGov : undefined
+            standards_certification_governance: Object.keys(standardsGov).length > 0 ? standardsGov : undefined,
+            visual_diff_governance: Object.keys(visualDiffGovNorm).length > 0 ? {
+                ...visualDiffGovNorm,
+                production_certified: false,
+                standard_certified: false
+            } : undefined
         };
 
         return {
@@ -2820,6 +2899,11 @@ class PreflightService {
             selective_image_governance: Object.keys(selectiveImageGov).length > 0 ? selectiveImageGov : undefined,
             font_governance: Object.keys(fontGov).length > 0 ? fontGov : undefined,
             transparency_overprint_physical_governance: Object.keys(transparencyOverprintPhysicalGov).length > 0 ? transparencyOverprintPhysicalGov : undefined,
+            visual_diff_governance: Object.keys(visualDiffGovNorm).length > 0 ? {
+                ...visualDiffGovNorm,
+                production_certified: false,
+                standard_certified: false
+            } : undefined,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
