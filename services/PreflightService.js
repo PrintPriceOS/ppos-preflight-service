@@ -1703,6 +1703,25 @@ class PreflightService {
             }
         }
 
+        // Production Package Governance (Phase 71)
+        const productionPackageGovSources = [
+            fixAuditData?.production_package_governance,
+            fixAuditData?.delta_report?.production_package_governance,
+            res.fix_summary?.production_package_governance,
+            deltaReportData?.production_package_governance,
+            res.delta_report?.production_package_governance,
+            res.delta_summary?.production_package_governance,
+            res.production_package_governance,
+        ];
+
+        let resolvedProductionPackageGov = null;
+        for (const src of productionPackageGovSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedProductionPackageGov = src;
+                break;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1939,6 +1958,21 @@ class PreflightService {
                 if (artifact_summary.heavy_pdf_probe_governance.review_required) {
                     artifact_summary.production_ready_artifact_available = false;
                 }
+            }
+
+            if (resolvedProductionPackageGov) {
+                // Service is the final authority: package_ready can never be true if Service-level
+                // production/review gates are not satisfied, regardless of upstream evidence.
+                const packageReady = resolvedProductionPackageGov.package_ready === true && productionCertified === true && requiresReview === false;
+                artifact_summary.production_package_governance = {
+                    package_ready: packageReady,
+                    approved_artifact_type: packageReady ? (resolvedProductionPackageGov.approved_artifact_type ?? null) : null,
+                    approved_artifact_hash: packageReady ? (resolvedProductionPackageGov.approved_artifact_hash ?? null) : null,
+                    included_reports: resolvedProductionPackageGov.included_reports || [],
+                    blocked_by_governance_domains: resolvedProductionPackageGov.blocked_by_governance_domains || [],
+                    warnings: resolvedProductionPackageGov.warnings || [],
+                    evidence: resolvedProductionPackageGov.evidence || {}
+                };
             }
 
             return {
@@ -2951,6 +2985,29 @@ class PreflightService {
              }
         }
 
+        // Phase 71C: Production Package Governance Exposure
+        // production_package_governance is a packaging/handoff manifest derived from upstream
+        // gates (artifact_trust, proof_approval_governance, payment). Service is the final
+        // authority: package_ready and the approved artifact manifest are only exposed when
+        // the Service's own production/review gates are also satisfied.
+        const productionPackageGovNorm = res?.production_package_governance
+            || res?.fix_summary?.production_package_governance
+            || res?.delta_report?.production_package_governance
+            || {};
+
+        const productionPackageGovExposed = Object.keys(productionPackageGovNorm).length > 0 ? (() => {
+            const packageReady = productionPackageGovNorm.package_ready === true && productionCertified === true && requiresReview === false;
+            return {
+                package_ready: packageReady,
+                approved_artifact_type: packageReady ? (productionPackageGovNorm.approved_artifact_type ?? null) : null,
+                approved_artifact_hash: packageReady ? (productionPackageGovNorm.approved_artifact_hash ?? null) : null,
+                included_reports: productionPackageGovNorm.included_reports || [],
+                blocked_by_governance_domains: productionPackageGovNorm.blocked_by_governance_domains || [],
+                warnings: productionPackageGovNorm.warnings || [],
+                evidence: productionPackageGovNorm.evidence || {}
+            };
+        })() : undefined;
+
         const artifactListArray = Array.isArray(artifactList) ? artifactList : [];
         const artifact_summary = {
             artifact_count: artifactListArray.length,
@@ -2983,7 +3040,8 @@ class PreflightService {
                 ...proofApprovalGovNorm,
                 production_certified: false
             } : undefined,
-            heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined
+            heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
+            production_package_governance: productionPackageGovExposed
         };
 
         return {
@@ -3056,6 +3114,7 @@ class PreflightService {
             } : undefined,
             heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
             heavy_pdf_probe_governance_operator: heavyPdfProbeGovOperator || undefined,
+            production_package_governance: productionPackageGovExposed,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };

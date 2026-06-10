@@ -1,0 +1,325 @@
+{
+  "generated_at": "2026-06-10T15:36:56.389Z",
+  "phase": "71C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "ENGINE_REPORT",
+  "core_principle": "production_package_governance is a packaging/handoff manifest, not a new certification authority. Service remains the final authority: package_ready, approved_artifact_type, and approved_artifact_hash are only exposed when both the worker-supplied package_ready=true AND the Service's own production_certified=true and review_required=false hold. Reports and warnings are always preserved for traceability. No raw filesystem paths are exposed.",
+  "changes": [
+    "FixAuditNormalizer.js: production_package_governance preserved in v2 normalization",
+    "FixAuditNormalizer.js: delta_report.production_package_governance preserved",
+    "FixCapabilityContract.js: version bumped to 51.0, engine_registry_compatibility=phase-71",
+    "FixCapabilityContract.js: PRODUCTION_PACKAGE_CONTRACT and GENERATE_PRODUCTION_PACKAGE_MANIFEST capabilities added under production_package category",
+    "PreflightService.js: production_package_governance governance sources resolved in getJobArtifacts after heavy PDF probe block",
+    "PreflightService.js: artifact_summary.production_package_governance exposed with package_ready gated by Service-level productionCertified/requiresReview",
+    "PreflightService.js: Phase 71C exposure block added in _normalizeJobPayload before artifact_summary construction",
+    "PreflightService.js: production_package_governance added to artifact_summary and return payload in _normalizeJobPayload"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 51.0",
+      "pass": true,
+      "notes": "version=51.0"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-71",
+      "pass": true,
+      "notes": "got: phase-71"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_PRODUCTION_PACKAGE_MANIFEST capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT category=production_package",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT production_certified=false",
+      "pass": true,
+      "notes": "Production package contract must not imply production certification"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PRODUCTION_PACKAGE_CONTRACT requires_human_review=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 70 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 69 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 68 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_package_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "included_reports preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_hash exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "included_reports exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type withheld",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_hash withheld",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "blocked_by_governance_domains preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "productionCertified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "requiresReview=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Service-level productionCertified=true (Service does not track payment)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Service-level requiresReview=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=false (worker payment gate preserved)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type withheld despite Service-level certification",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "blocked_by_governance_domains includes payment_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_hash exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Service overrides package_ready to false despite worker package_ready=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type withheld",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_hash withheld",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "package_ready=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "approved_artifact_type withheld",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no production_package_governance -> undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no production_package_governance -> productionPackageGovExposed undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no production_package_governance -> production_certified not downgraded",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.production_package_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.production_package_governance.approved_artifact_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 71B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Approved artifact manifest only exposed when package_ready=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "blocked_by_governance_domains preserved from worker scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "v2 without production_package_governance → production_package_governance=undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_package_governance contains no local filesystem paths",
+      "pass": true,
+      "notes": "No local paths found in governance payload"
+    },
+    {
+      "scenario": "included_reports are filenames only, not paths",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "visual_diff_governance preserved alongside production_package_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "proof_approval_governance preserved alongside production_package_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_package_governance preserved alongside other governances",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA still present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "VALIDATE_PDFA compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 60,
+    "passed": 60,
+    "failed": 0
+  }
+}

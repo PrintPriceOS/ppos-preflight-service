@@ -2,9 +2,9 @@ class FixCapabilityContract {
     static getCapabilities() {
         return {
             ok: true,
-            version: "50.0",
+            version: "51.0",
             source: "SERVICE_MIRROR",
-            engine_registry_compatibility: "phase-70",
+            engine_registry_compatibility: "phase-71",
             capabilities: [
                 {
                     fix_id: "REBUILD_TRIMBOX",
@@ -1602,6 +1602,49 @@ class FixCapabilityContract {
                     supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
                     customer_message: "pdfimages warnings (such as invalid font weight) are classified separately from fatal extraction failures.",
                     operator_message: "Distinguishes pdfimages WARNING_ONLY/PARTIAL_SUCCESS output (e.g. Syntax Warning: Invalid Font Weight) from FAILED_NO_OUTPUT/FAILED_FATAL. Image analysis continues when output is usable."
+                },
+                // Phase 71: Production Package Contract
+                {
+                    fix_id: "PRODUCTION_PACKAGE_CONTRACT",
+                    label: "Production Package Contract",
+                    category: "production_package",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    production_package: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Printhouse delivery packaging is only released once review, proof approval, production certification, and payment gates are all satisfied.",
+                    operator_message: "Production package contract. package_ready=true only when artifact_trust, proof_approval_governance, and payment gates are all clear. Never overrides upstream blockers."
+                },
+                {
+                    fix_id: "GENERATE_PRODUCTION_PACKAGE_MANIFEST",
+                    label: "Generate Production Package Manifest",
+                    category: "production_package",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    production_package: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Generates a manifest of the approved artifact and included reports for production handoff.",
+                    operator_message: "Emits approved_artifact_type, approved_artifact_hash, and included_reports for printhouse delivery packaging. Manifest only — never certifies output."
                 }
             ],
             policy_modes: [
