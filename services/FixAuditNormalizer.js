@@ -206,6 +206,14 @@ class FixAuditNormalizer {
                 ret.production_package_governance = auditData.production_package_governance;
             }
 
+            // Policy Profile Governance (Phase 72)
+            if (auditData.policy_profile_governance) {
+                // Forward the profile governance output as-is.
+                // Governance invariants (production_certified=false, standard_certified=false,
+                // compliance_claim_allowed=false) are enforced by the Engine evaluator.
+                ret.policy_profile_governance = auditData.policy_profile_governance;
+            }
+
             // Heavy PDF Probe Governance (Phase 62F)
             if (auditData.heavy_pdf_probe_governance) {
                 ret.heavy_pdf_probe_governance = auditData.heavy_pdf_probe_governance;
@@ -254,6 +262,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.visual_diff_governance) ret.delta_report.visual_diff_governance = auditData.delta_report.visual_diff_governance;
                 if (auditData.delta_report.proof_approval_governance) ret.delta_report.proof_approval_governance = auditData.delta_report.proof_approval_governance;
                 if (auditData.delta_report.production_package_governance) ret.delta_report.production_package_governance = auditData.delta_report.production_package_governance;
+                if (auditData.delta_report.policy_profile_governance) ret.delta_report.policy_profile_governance = auditData.delta_report.policy_profile_governance;
                 if (auditData.delta_report.heavy_pdf_probe_governance) ret.delta_report.heavy_pdf_probe_governance = auditData.delta_report.heavy_pdf_probe_governance;
             }
 

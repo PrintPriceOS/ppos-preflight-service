@@ -1,0 +1,200 @@
+{
+  "generated_at": "2026-06-10T18:51:29.901Z",
+  "phase": "72C",
+  "repo": "ppos-preflight-service",
+  "category": "service_policy_profile_exposure",
+  "smoke_passed": true,
+  "governance": {
+    "profile_governance_preserved_through_normalizer": true,
+    "delta_report_passthrough_added": true,
+    "overclaim_prevention_layer": "Engine (PolicyProfileEvaluator)",
+    "production_certified_in_service_output": false
+  },
+  "summary": {
+    "total": 36,
+    "passed": 36,
+    "failed": 0
+  },
+  "results": [
+    {
+      "label": "1.1 policy_profile_governance present in normalized output",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.1 profile_id preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.1 profile_passed preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.1 profile_blockers preserved (empty)",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.1 profile_warnings preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.2 blocked profile_id preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.2 profile_passed=false preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.2 PROFILE_BLEED_REQUIRED preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.2 PROFILE_NO_JAVASCRIPT_VIOLATED preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.3 Normalizer returns without crash when policy_profile_governance absent",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "1.3 policy_profile_governance absent when not in audit data",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "2.1 delta_report present",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "2.1 delta_report.policy_profile_governance present",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "2.1 delta profile_id preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "2.1 delta profile_passed=false preserved",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "2.2 Normalizer handles absent delta_report.policy_profile_governance without crash",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.1 OFFSET_STANDARD: production_certified=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.2 OFFSET_STANDARD: standard_certified=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.3 OFFSET_STANDARD: compliance_claim_allowed=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.4 OFFSET_STANDARD: print_ready_claim_allowed=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.1 PDFX4_STRICT: production_certified=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.2 PDFX4_STRICT: standard_certified=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.3 PDFX4_STRICT: compliance_claim_allowed=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "3.4 PDFX4_STRICT: print_ready_claim_allowed=false after normalization",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.1 profile_id is string",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.2 profile_label is string",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.3 profile_passed is boolean",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.4 profile_blockers is array",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.5 profile_warnings is array",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "4.6 evaluated_at is string",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "5.1 Real governance: no production_certified=true",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "5.2 Real governance: no standard_certified=true",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "5.3 Real governance: no compliance_claim_allowed=true",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "6.1 FixAuditNormalizer has policy_profile_governance passthrough",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "6.2 FixAuditNormalizer has Phase 72 annotation",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "label": "6.3 delta_report.policy_profile_governance passthrough",
+      "pass": true,
+      "detail": null
+    }
+  ]
+}
