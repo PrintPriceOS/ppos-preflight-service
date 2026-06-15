@@ -1,0 +1,218 @@
+{
+  "generated_at": "2026-06-15T18:39:04.868Z",
+  "phase": "73C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "WORKER_REPORT",
+  "core_principle": "machine_readiness_governance is an advisory signal set for Phase 73D machine assignment only. It is never a certification authority: machine_match_authority, production_certified, and standard_certified are always forced to false at the Service exposure layer regardless of upstream values, and the governance does not influence the Service's own production_certified/review_required gates.",
+  "changes": [
+    "FixAuditNormalizer.js: machine_readiness_governance preserved in v2 normalization (root)",
+    "FixAuditNormalizer.js: delta_report.machine_readiness_governance preserved",
+    "PreflightService.js: machine_readiness_governance governance sources resolved in getJobArtifacts after production package governance block",
+    "PreflightService.js: artifact_summary.machine_readiness_governance exposed (PHYSICAL_OUTPUT_FALLBACK path) with machine_match_authority/production_certified/standard_certified forced to false",
+    "PreflightService.js: Phase 73C exposure block added in _normalizeJobPayload before artifact_summary construction",
+    "PreflightService.js: machine_readiness_governance added to artifact_summary and return payload in _normalizeJobPayload"
+  ],
+  "results": [
+    {
+      "scenario": "machine_readiness_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_capability_signals preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_match_required preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "incompatible_machine_reasons preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "warnings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.machine_readiness_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.machine_readiness_governance.incompatible_machine_reasons preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "exposed present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_match_required=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "incompatible_machine_reasons empty",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "warnings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_match_authority=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_match_required=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "all incompatible_machine_reasons preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_capability_signals preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_match_authority forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no machine_readiness_governance -> undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no machine_readiness_governance -> exposed undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 73B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Governance invariants hold for all 73B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_capability_signals preserved across 73B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "incompatible_machine_reasons preserved across 73B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified at root unaffected by machine_readiness_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.production_certified unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.review_required unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "machine_readiness_governance contains no local filesystem paths",
+      "pass": true,
+      "notes": "No local paths found in governance payload"
+    },
+    {
+      "scenario": "FixAuditNormalizer has machine_readiness_governance passthrough",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "FixAuditNormalizer has Phase 73 annotation",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.machine_readiness_governance passthrough present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService resolves machine_readiness_governance sources",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes machine_readiness_governance in artifact_summary",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes machine_readiness_governance at root payload",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 39,
+    "passed": 39,
+    "failed": 0
+  }
+}

@@ -214,6 +214,15 @@ class FixAuditNormalizer {
                 ret.policy_profile_governance = auditData.policy_profile_governance;
             }
 
+            // Machine Readiness Governance (Phase 73)
+            if (auditData.machine_readiness_governance) {
+                // Forward the machine readiness governance output as-is.
+                // Signals are advisory inputs to Phase 73D machine assignment only —
+                // machine_match_authority/production_certified/standard_certified=false
+                // are enforced by the Worker, never a certification authority.
+                ret.machine_readiness_governance = auditData.machine_readiness_governance;
+            }
+
             // Heavy PDF Probe Governance (Phase 62F)
             if (auditData.heavy_pdf_probe_governance) {
                 ret.heavy_pdf_probe_governance = auditData.heavy_pdf_probe_governance;
@@ -263,6 +272,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.proof_approval_governance) ret.delta_report.proof_approval_governance = auditData.delta_report.proof_approval_governance;
                 if (auditData.delta_report.production_package_governance) ret.delta_report.production_package_governance = auditData.delta_report.production_package_governance;
                 if (auditData.delta_report.policy_profile_governance) ret.delta_report.policy_profile_governance = auditData.delta_report.policy_profile_governance;
+                if (auditData.delta_report.machine_readiness_governance) ret.delta_report.machine_readiness_governance = auditData.delta_report.machine_readiness_governance;
                 if (auditData.delta_report.heavy_pdf_probe_governance) ret.delta_report.heavy_pdf_probe_governance = auditData.delta_report.heavy_pdf_probe_governance;
             }
 

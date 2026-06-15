@@ -1722,6 +1722,25 @@ class PreflightService {
             }
         }
 
+        // Machine Readiness Governance (Phase 73)
+        const machineReadinessGovSources = [
+            fixAuditData?.machine_readiness_governance,
+            fixAuditData?.delta_report?.machine_readiness_governance,
+            res.fix_summary?.machine_readiness_governance,
+            deltaReportData?.machine_readiness_governance,
+            res.delta_report?.machine_readiness_governance,
+            res.delta_summary?.machine_readiness_governance,
+            res.machine_readiness_governance,
+        ];
+
+        let resolvedMachineReadinessGov = null;
+        for (const src of machineReadinessGovSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedMachineReadinessGov = src;
+                break;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1972,6 +1991,21 @@ class PreflightService {
                     blocked_by_governance_domains: resolvedProductionPackageGov.blocked_by_governance_domains || [],
                     warnings: resolvedProductionPackageGov.warnings || [],
                     evidence: resolvedProductionPackageGov.evidence || {}
+                };
+            }
+
+            if (resolvedMachineReadinessGov) {
+                // Phase 73C: machine_readiness_governance is an advisory signal set for
+                // machine assignment (Phase 73D) only. It is never a certification authority.
+                artifact_summary.machine_readiness_governance = {
+                    machine_capability_signals: resolvedMachineReadinessGov.machine_capability_signals || {},
+                    machine_match_required: resolvedMachineReadinessGov.machine_match_required ?? false,
+                    incompatible_machine_reasons: resolvedMachineReadinessGov.incompatible_machine_reasons || [],
+                    warnings: resolvedMachineReadinessGov.warnings || [],
+                    machine_match_authority: false,
+                    production_certified: false,
+                    standard_certified: false,
+                    evidence: resolvedMachineReadinessGov.evidence || {}
                 };
             }
 
@@ -2995,6 +3029,27 @@ class PreflightService {
             || res?.delta_report?.production_package_governance
             || {};
 
+        // Phase 73C: Machine Readiness Governance Exposure
+        // machine_readiness_governance is an advisory signal set for machine assignment
+        // (Phase 73D) only. It is never a certification authority — machine_match_authority,
+        // production_certified, and standard_certified are always forced to false here
+        // regardless of upstream values.
+        const machineReadinessGovNorm = res?.machine_readiness_governance
+            || res?.fix_summary?.machine_readiness_governance
+            || res?.delta_report?.machine_readiness_governance
+            || {};
+
+        const machineReadinessGovExposed = Object.keys(machineReadinessGovNorm).length > 0 ? {
+            machine_capability_signals: machineReadinessGovNorm.machine_capability_signals || {},
+            machine_match_required: machineReadinessGovNorm.machine_match_required ?? false,
+            incompatible_machine_reasons: machineReadinessGovNorm.incompatible_machine_reasons || [],
+            warnings: machineReadinessGovNorm.warnings || [],
+            machine_match_authority: false,
+            production_certified: false,
+            standard_certified: false,
+            evidence: machineReadinessGovNorm.evidence || {}
+        } : undefined;
+
         const productionPackageGovExposed = Object.keys(productionPackageGovNorm).length > 0 ? (() => {
             const packageReady = productionPackageGovNorm.package_ready === true && productionCertified === true && requiresReview === false;
             return {
@@ -3041,7 +3096,8 @@ class PreflightService {
                 production_certified: false
             } : undefined,
             heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
-            production_package_governance: productionPackageGovExposed
+            production_package_governance: productionPackageGovExposed,
+            machine_readiness_governance: machineReadinessGovExposed
         };
 
         return {
@@ -3115,6 +3171,7 @@ class PreflightService {
             heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
             heavy_pdf_probe_governance_operator: heavyPdfProbeGovOperator || undefined,
             production_package_governance: productionPackageGovExposed,
+            machine_readiness_governance: machineReadinessGovExposed,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };
