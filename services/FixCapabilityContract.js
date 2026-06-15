@@ -2,9 +2,9 @@ class FixCapabilityContract {
     static getCapabilities() {
         return {
             ok: true,
-            version: "51.0",
+            version: "52.0",
             source: "SERVICE_MIRROR",
-            engine_registry_compatibility: "phase-71",
+            engine_registry_compatibility: "phase-74",
             capabilities: [
                 {
                     fix_id: "REBUILD_TRIMBOX",
@@ -1645,6 +1645,49 @@ class FixCapabilityContract {
                     supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
                     customer_message: "Generates a manifest of the approved artifact and included reports for production handoff.",
                     operator_message: "Emits approved_artifact_type, approved_artifact_hash, and included_reports for printhouse delivery packaging. Manifest only — never certifies output."
+                },
+                // Phase 74: Audit Bundle / Compliance Export
+                {
+                    fix_id: "AUDIT_BUNDLE_CONTRACT",
+                    label: "Audit Bundle Contract",
+                    category: "audit_bundle",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    audit_bundle: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "A defensible audit/compliance export bundle is available for this job, summarizing findings, fixes, and governance evidence.",
+                    operator_message: "Audit bundle contract. bundle_ready reflects upstream evidence completeness only. Never grants production_certified or standard_certified on its own."
+                },
+                {
+                    fix_id: "GENERATE_AUDIT_BUNDLE_MANIFEST",
+                    label: "Generate Audit Bundle Manifest",
+                    category: "audit_bundle",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    audit_bundle: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Generates a defensible audit/compliance export bundle covering fix audit, delta report, and governance evidence.",
+                    operator_message: "Emits fix_audit_hash, delta_report_hash, governance_domains_included, and artifact_trust for compliance export. Manifest only — never certifies output."
                 }
             ],
             policy_modes: [

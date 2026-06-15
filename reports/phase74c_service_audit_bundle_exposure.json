@@ -1,0 +1,327 @@
+{
+  "generated_at": "2026-06-15T18:50:50.642Z",
+  "phase": "74C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "WORKER_REPORT",
+  "core_principle": "audit_bundle_governance is a defensible compliance/export manifest summarizing fix_audit/delta_report hashes, governance domain coverage, and artifact_trust. It is never a certification authority: production_certified and standard_certified are always forced to false at the Service exposure layer regardless of upstream values, and the governance does not influence the Service's own production_certified/review_required gates. The audit_bundle.json artifact (when present) is exposed as a downloadable governed artifact via the existing artifact endpoint.",
+  "changes": [
+    "FixAuditNormalizer.js: audit_bundle_governance preserved in v2 normalization (root)",
+    "FixAuditNormalizer.js: delta_report.audit_bundle_governance preserved",
+    "FixCapabilityContract.js: version bumped to 52.0, engine_registry_compatibility=phase-74",
+    "FixCapabilityContract.js: AUDIT_BUNDLE_CONTRACT and GENERATE_AUDIT_BUNDLE_MANIFEST capabilities added under audit_bundle category",
+    "PreflightService.js: audit_bundle_governance governance sources resolved in getJobArtifacts after machine readiness governance block",
+    "PreflightService.js: audit_bundle.json recognized as a governed AUDIT_BUNDLE artifact in getJobArtifacts file discovery",
+    "PreflightService.js: artifact_summary.audit_bundle_available and artifact_summary.audit_bundle_governance exposed (PHYSICAL_OUTPUT_FALLBACK path) with production_certified/standard_certified forced to false",
+    "PreflightService.js: Phase 74C exposure block added in _normalizeJobPayload before artifact_summary construction",
+    "PreflightService.js: audit_bundle_governance and audit_bundle_available added to artifact_summary and return payload in _normalizeJobPayload",
+    "routes/preflight.js: resolveArtifactByAlias extended with audit_bundle -> audit_bundle.json for governed artifact download"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 52.0",
+      "pass": true,
+      "notes": "version=52.0"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-74",
+      "pass": true,
+      "notes": "got: phase-74"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_AUDIT_BUNDLE_MANIFEST capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT category=audit_bundle",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT production_certified=false",
+      "pass": true,
+      "notes": "Audit bundle contract must not imply production certification"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "AUDIT_BUNDLE_CONTRACT requires_human_review=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 71 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 70 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 68 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "audit_bundle_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "bundle_ready preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fix_audit_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "governance_domains_included preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.audit_bundle_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.audit_bundle_governance.fix_audit_hash preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.audit_bundle_governance.governance_domains_included preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "exposed present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "bundle_ready=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fix_audit_hash exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report_hash exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "governance_domains_included exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "exposed present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "bundle_ready=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "fix_audit_hash=null",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report_hash=null",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "governance_domains_included empty",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "warnings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no audit_bundle_governance -> undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no audit_bundle_governance -> exposed undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified at root unaffected by audit_bundle_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.production_certified unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.review_required unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "audit_bundle_governance contains no local filesystem paths",
+      "pass": true,
+      "notes": "No local paths found in governance payload"
+    },
+    {
+      "scenario": "FixAuditNormalizer has audit_bundle_governance passthrough",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "FixAuditNormalizer has Phase 74 annotation",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.audit_bundle_governance passthrough present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService resolves audit_bundle_governance sources",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes audit_bundle_governance in artifact_summary",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes audit_bundle_governance at root payload",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService recognizes audit_bundle.json as a governed artifact",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes audit_bundle_available in artifact_summary",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "resolveArtifactByAlias candidateTypes includes audit_bundle",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "resolveArtifactByAlias candidateFilenames includes audit_bundle.json",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 74B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Governance invariants hold for all 74B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "hashes preserved across 74B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "governance_domains_included preserved across 74B scenarios",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 60,
+    "passed": 60,
+    "failed": 0
+  }
+}

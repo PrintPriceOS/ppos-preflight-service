@@ -1741,6 +1741,25 @@ class PreflightService {
             }
         }
 
+        // Audit Bundle Governance (Phase 74)
+        const auditBundleGovSources = [
+            fixAuditData?.audit_bundle_governance,
+            fixAuditData?.delta_report?.audit_bundle_governance,
+            res.fix_summary?.audit_bundle_governance,
+            deltaReportData?.audit_bundle_governance,
+            res.delta_report?.audit_bundle_governance,
+            res.delta_summary?.audit_bundle_governance,
+            res.audit_bundle_governance,
+        ];
+
+        let resolvedAuditBundleGov = null;
+        for (const src of auditBundleGovSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedAuditBundleGov = src;
+                break;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -1896,6 +1915,11 @@ class PreflightService {
                             a1.customer_visible = false;
                             a1.recommended_use = "Internal intermediate output";
                         }
+                    } else if (file === 'audit_bundle.json') {
+                        const a1 = pushArtifact('audit_bundle');
+                        a1.artifact_role = 'AUDIT_BUNDLE';
+                        a1.customer_visible = false;
+                        a1.recommended_use = "Defensible audit/compliance export bundle";
                     } else if (file.endsWith('.png')) {
                         const a1 = pushArtifact('page_preview');
                         a1.recommended_use = "Page preview image";
@@ -1940,7 +1964,8 @@ class PreflightService {
                 fix_audit_available: artifactListArray.some(a => a.type === 'fix_audit' && a.downloadable),
                 delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
                 production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
-                review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable)
+                review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
+                audit_bundle_available: artifactListArray.some(a => a.type === 'audit_bundle' && a.downloadable)
             };
 
             if (resolvedVisualDiffGov) {
@@ -2006,6 +2031,24 @@ class PreflightService {
                     production_certified: false,
                     standard_certified: false,
                     evidence: resolvedMachineReadinessGov.evidence || {}
+                };
+            }
+
+            if (resolvedAuditBundleGov) {
+                // Phase 74C: audit_bundle_governance is a defensible compliance/export
+                // manifest only. It never grants production/standard certification —
+                // those invariants are always forced to false here regardless of
+                // upstream values.
+                artifact_summary.audit_bundle_governance = {
+                    bundle_ready: resolvedAuditBundleGov.bundle_ready === true,
+                    fix_audit_hash: resolvedAuditBundleGov.fix_audit_hash ?? null,
+                    delta_report_hash: resolvedAuditBundleGov.delta_report_hash ?? null,
+                    governance_domains_included: resolvedAuditBundleGov.governance_domains_included || [],
+                    artifact_trust: resolvedAuditBundleGov.artifact_trust || {},
+                    production_certified: false,
+                    standard_certified: false,
+                    warnings: resolvedAuditBundleGov.warnings || [],
+                    evidence: resolvedAuditBundleGov.evidence || {}
                 };
             }
 
@@ -3063,6 +3106,28 @@ class PreflightService {
             };
         })() : undefined;
 
+        // Phase 74C: Audit Bundle Governance Exposure
+        // audit_bundle_governance is a defensible compliance/export manifest derived from
+        // fix_audit / delta_report hashes and governance domain coverage. It never grants
+        // production/standard certification on its own — those invariants are always
+        // forced to false here regardless of upstream values.
+        const auditBundleGovNorm = res?.audit_bundle_governance
+            || res?.fix_summary?.audit_bundle_governance
+            || res?.delta_report?.audit_bundle_governance
+            || {};
+
+        const auditBundleGovExposed = Object.keys(auditBundleGovNorm).length > 0 ? {
+            bundle_ready: auditBundleGovNorm.bundle_ready === true,
+            fix_audit_hash: auditBundleGovNorm.fix_audit_hash ?? null,
+            delta_report_hash: auditBundleGovNorm.delta_report_hash ?? null,
+            governance_domains_included: auditBundleGovNorm.governance_domains_included || [],
+            artifact_trust: auditBundleGovNorm.artifact_trust || {},
+            production_certified: false,
+            standard_certified: false,
+            warnings: auditBundleGovNorm.warnings || [],
+            evidence: auditBundleGovNorm.evidence || {}
+        } : undefined;
+
         const artifactListArray = Array.isArray(artifactList) ? artifactList : [];
         const artifact_summary = {
             artifact_count: artifactListArray.length,
@@ -3077,6 +3142,7 @@ class PreflightService {
             delta_report_available: artifactListArray.some(a => a.type === 'delta_report' && a.downloadable),
             production_ready_artifact_available: artifactListArray.some(a => a.artifact_role === 'PRODUCTION_READY' && a.downloadable),
             review_required_artifact_available: artifactListArray.some(a => a.artifact_role === 'REVIEW_REQUIRED' && a.downloadable),
+            audit_bundle_available: artifactListArray.some(a => a.type === 'audit_bundle' && a.downloadable),
             artifact_trust: Object.keys(rootArtifactTrust).length > 0 ? rootArtifactTrust : undefined,
             structural_metadata_governance: Object.keys(structuralGov).length > 0 ? structuralGov : undefined,
             page_marks_governance: Object.keys(pageMarksGov).length > 0 ? pageMarksGov : undefined,
@@ -3097,7 +3163,8 @@ class PreflightService {
             } : undefined,
             heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
             production_package_governance: productionPackageGovExposed,
-            machine_readiness_governance: machineReadinessGovExposed
+            machine_readiness_governance: machineReadinessGovExposed,
+            audit_bundle_governance: auditBundleGovExposed
         };
 
         return {
@@ -3172,6 +3239,7 @@ class PreflightService {
             heavy_pdf_probe_governance_operator: heavyPdfProbeGovOperator || undefined,
             production_package_governance: productionPackageGovExposed,
             machine_readiness_governance: machineReadinessGovExposed,
+            audit_bundle_governance: auditBundleGovExposed,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };

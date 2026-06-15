@@ -45,7 +45,8 @@ function resolveArtifactByAlias({ artifacts, artifactList, requestedKey, require
         certified_pdf: ['certified_pdf'],
         fix_audit: ['fix_audit'],
         analysis_report: ['analysis_report', 'report_json'],
-        report_json: ['analysis_report', 'report_json']
+        report_json: ['analysis_report', 'report_json'],
+        audit_bundle: ['audit_bundle']
     };
 
     const candidateFilenames = {
@@ -56,7 +57,8 @@ function resolveArtifactByAlias({ artifacts, artifactList, requestedKey, require
         certified_pdf: ['certified.pdf'],
         fix_audit: ['fix_audit.json'],
         analysis_report: ['report.json'],
-        report_json: ['report.json']
+        report_json: ['report.json'],
+        audit_bundle: ['audit_bundle.json']
     };
 
     let resolvedType = null;

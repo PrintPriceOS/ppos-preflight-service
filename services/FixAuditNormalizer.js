@@ -227,6 +227,15 @@ class FixAuditNormalizer {
             if (auditData.heavy_pdf_probe_governance) {
                 ret.heavy_pdf_probe_governance = auditData.heavy_pdf_probe_governance;
             }
+
+            // Audit Bundle Governance (Phase 74)
+            if (auditData.audit_bundle_governance) {
+                // Forward the audit bundle governance output as-is. The bundle is a
+                // defensible compliance/export manifest only — it never grants
+                // production_certified/standard_certified authority on its own;
+                // those invariants are enforced at the Service exposure layer.
+                ret.audit_bundle_governance = auditData.audit_bundle_governance;
+            }
             if (auditData.analysisIntegrity) {
                 ret.analysisIntegrity = auditData.analysisIntegrity;
             }
@@ -274,6 +283,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.policy_profile_governance) ret.delta_report.policy_profile_governance = auditData.delta_report.policy_profile_governance;
                 if (auditData.delta_report.machine_readiness_governance) ret.delta_report.machine_readiness_governance = auditData.delta_report.machine_readiness_governance;
                 if (auditData.delta_report.heavy_pdf_probe_governance) ret.delta_report.heavy_pdf_probe_governance = auditData.delta_report.heavy_pdf_probe_governance;
+                if (auditData.delta_report.audit_bundle_governance) ret.delta_report.audit_bundle_governance = auditData.delta_report.audit_bundle_governance;
             }
 
             return ret;
