@@ -2,9 +2,9 @@ class FixCapabilityContract {
     static getCapabilities() {
         return {
             ok: true,
-            version: "52.0",
+            version: "53.0",
             source: "SERVICE_MIRROR",
-            engine_registry_compatibility: "phase-74",
+            engine_registry_compatibility: "phase-75",
             capabilities: [
                 {
                     fix_id: "REBUILD_TRIMBOX",
@@ -1688,6 +1688,48 @@ class FixCapabilityContract {
                     supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
                     customer_message: "Generates a defensible audit/compliance export bundle covering fix audit, delta report, and governance evidence.",
                     operator_message: "Emits fix_audit_hash, delta_report_hash, governance_domains_included, and artifact_trust for compliance export. Manifest only — never certifies output."
+                },
+                {
+                    fix_id: "RECOMMENDATION_CONTRACT",
+                    label: "Recommendation Contract",
+                    category: "recommendation",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    recommendation: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Safe next-step recommendations are available for this job based on evidence gathered during analysis.",
+                    operator_message: "Recommendation contract. Signals are advisory only — never grants recommendation_authority, auto_apply_authority, production_certified, or standard_certified."
+                },
+                {
+                    fix_id: "GENERATE_RECOMMENDATION_MANIFEST",
+                    label: "Generate Recommendation Manifest",
+                    category: "recommendation",
+                    implemented: false,
+                    detectable: false,
+                    autofixable: false,
+                    risk_level: "LOW",
+                    requires_human_review: true,
+                    production_safe: false,
+                    destructive: false,
+                    recommendation: true,
+                    evidence_required: true,
+                    production_certified: false,
+                    standard_certified: false,
+                    compliance_claim_allowed: false,
+                    toolchain: [],
+                    supported_modes: ["REVIEW_REQUIRED", "EXPERIMENTAL"],
+                    customer_message: "Generates recommended next actions, unsafe auto-fix flags, and human review reasons based on finding-level evidence.",
+                    operator_message: "Emits recommended_next_actions, unsafe_auto_actions, and human_review_actions from recommendation signals. Manifest only — never auto-applies fixes or certifies output."
                 }
             ],
             policy_modes: [

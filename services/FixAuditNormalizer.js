@@ -236,6 +236,15 @@ class FixAuditNormalizer {
                 // those invariants are enforced at the Service exposure layer.
                 ret.audit_bundle_governance = auditData.audit_bundle_governance;
             }
+
+            // Recommendation Governance (Phase 75)
+            if (auditData.recommendation_governance) {
+                // Forward the recommendation governance output as-is. Recommendations
+                // are advisory only — they never grant recommendation_authority,
+                // auto_apply_authority, production_certified, or standard_certified;
+                // those invariants are enforced at the Service exposure layer.
+                ret.recommendation_governance = auditData.recommendation_governance;
+            }
             if (auditData.analysisIntegrity) {
                 ret.analysisIntegrity = auditData.analysisIntegrity;
             }
@@ -284,6 +293,7 @@ class FixAuditNormalizer {
                 if (auditData.delta_report.machine_readiness_governance) ret.delta_report.machine_readiness_governance = auditData.delta_report.machine_readiness_governance;
                 if (auditData.delta_report.heavy_pdf_probe_governance) ret.delta_report.heavy_pdf_probe_governance = auditData.delta_report.heavy_pdf_probe_governance;
                 if (auditData.delta_report.audit_bundle_governance) ret.delta_report.audit_bundle_governance = auditData.delta_report.audit_bundle_governance;
+                if (auditData.delta_report.recommendation_governance) ret.delta_report.recommendation_governance = auditData.delta_report.recommendation_governance;
             }
 
             return ret;

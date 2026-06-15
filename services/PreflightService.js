@@ -1760,6 +1760,25 @@ class PreflightService {
             }
         }
 
+        // Recommendation Governance (Phase 75)
+        const recommendationGovSources = [
+            fixAuditData?.recommendation_governance,
+            fixAuditData?.delta_report?.recommendation_governance,
+            res.fix_summary?.recommendation_governance,
+            deltaReportData?.recommendation_governance,
+            res.delta_report?.recommendation_governance,
+            res.delta_summary?.recommendation_governance,
+            res.recommendation_governance,
+        ];
+
+        let resolvedRecommendationGov = null;
+        for (const src of recommendationGovSources) {
+            if (src && Object.keys(src).length > 0) {
+                resolvedRecommendationGov = src;
+                break;
+            }
+        }
+
         const artifactTrustSources = [
             fixAuditData?.artifact_trust,
             fixAuditData?.delta_report?.artifact_trust,
@@ -2049,6 +2068,26 @@ class PreflightService {
                     standard_certified: false,
                     warnings: resolvedAuditBundleGov.warnings || [],
                     evidence: resolvedAuditBundleGov.evidence || {}
+                };
+            }
+
+            if (resolvedRecommendationGov) {
+                // Phase 75C: recommendation_governance is an advisory signal set only.
+                // It never grants recommendation_authority, auto_apply_authority,
+                // production_certified, or standard_certified — those invariants are
+                // always forced to false here regardless of upstream values.
+                artifact_summary.recommendation_governance = {
+                    recommendation_signals_available: resolvedRecommendationGov.recommendation_signals_available === true,
+                    total_findings: resolvedRecommendationGov.total_findings ?? 0,
+                    recommended_next_actions: resolvedRecommendationGov.recommended_next_actions || [],
+                    unsafe_auto_actions: resolvedRecommendationGov.unsafe_auto_actions || [],
+                    human_review_actions: resolvedRecommendationGov.human_review_actions || [],
+                    recommendation_authority: false,
+                    auto_apply_authority: false,
+                    production_certified: false,
+                    standard_certified: false,
+                    warnings: resolvedRecommendationGov.warnings || [],
+                    evidence: resolvedRecommendationGov.evidence || {}
                 };
             }
 
@@ -3128,6 +3167,30 @@ class PreflightService {
             evidence: auditBundleGovNorm.evidence || {}
         } : undefined;
 
+        // Phase 75C: Recommendation Governance Exposure
+        // recommendation_governance is an advisory signal set derived from finding-level
+        // recommendation signals. It never grants recommendation_authority,
+        // auto_apply_authority, production_certified, or standard_certified on its own —
+        // those invariants are always forced to false here regardless of upstream values.
+        const recommendationGovNorm = res?.recommendation_governance
+            || res?.fix_summary?.recommendation_governance
+            || res?.delta_report?.recommendation_governance
+            || {};
+
+        const recommendationGovExposed = Object.keys(recommendationGovNorm).length > 0 ? {
+            recommendation_signals_available: recommendationGovNorm.recommendation_signals_available === true,
+            total_findings: recommendationGovNorm.total_findings ?? 0,
+            recommended_next_actions: recommendationGovNorm.recommended_next_actions || [],
+            unsafe_auto_actions: recommendationGovNorm.unsafe_auto_actions || [],
+            human_review_actions: recommendationGovNorm.human_review_actions || [],
+            recommendation_authority: false,
+            auto_apply_authority: false,
+            production_certified: false,
+            standard_certified: false,
+            warnings: recommendationGovNorm.warnings || [],
+            evidence: recommendationGovNorm.evidence || {}
+        } : undefined;
+
         const artifactListArray = Array.isArray(artifactList) ? artifactList : [];
         const artifact_summary = {
             artifact_count: artifactListArray.length,
@@ -3164,7 +3227,8 @@ class PreflightService {
             heavy_pdf_probe_governance: heavyPdfProbeGovCustomer || undefined,
             production_package_governance: productionPackageGovExposed,
             machine_readiness_governance: machineReadinessGovExposed,
-            audit_bundle_governance: auditBundleGovExposed
+            audit_bundle_governance: auditBundleGovExposed,
+            recommendation_governance: recommendationGovExposed
         };
 
         return {
@@ -3240,6 +3304,7 @@ class PreflightService {
             production_package_governance: productionPackageGovExposed,
             machine_readiness_governance: machineReadinessGovExposed,
             audit_bundle_governance: auditBundleGovExposed,
+            recommendation_governance: recommendationGovExposed,
             requiresHumanReview: requiresReview,
             productionCertified: productionCertified
         };

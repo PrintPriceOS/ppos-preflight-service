@@ -1,0 +1,305 @@
+{
+  "generated_at": "2026-06-15T20:00:29.715Z",
+  "phase": "75C",
+  "repo": "ppos-preflight-service",
+  "smoke_passed": true,
+  "input_mode": "WORKER_REPORT",
+  "core_principle": "recommendation_governance is an advisory signal set summarizing recommended_next_actions, unsafe_auto_actions, and human_review_actions derived from finding-level recommendation signals. It is never an authority: recommendation_authority, auto_apply_authority, production_certified, and standard_certified are always forced to false at the Service exposure layer regardless of upstream values, and the governance does not influence the Service's own production_certified/review_required gates. It is exposed in artifact_summary and the job payload (the source consumed downstream for the Human Report).",
+  "changes": [
+    "FixAuditNormalizer.js: recommendation_governance preserved in v2 normalization (root)",
+    "FixAuditNormalizer.js: delta_report.recommendation_governance preserved",
+    "FixCapabilityContract.js: version bumped to 53.0, engine_registry_compatibility=phase-75",
+    "FixCapabilityContract.js: RECOMMENDATION_CONTRACT and GENERATE_RECOMMENDATION_MANIFEST capabilities added under recommendation category",
+    "PreflightService.js: recommendation_governance governance sources resolved in getJobArtifacts after audit bundle governance block",
+    "PreflightService.js: artifact_summary.recommendation_governance exposed (PHYSICAL_OUTPUT_FALLBACK path) with recommendation_authority/auto_apply_authority/production_certified/standard_certified forced to false",
+    "PreflightService.js: Phase 75C exposure block added in _normalizeJobPayload after audit bundle governance exposure",
+    "PreflightService.js: recommendation_governance added to artifact_summary and root payload in _normalizeJobPayload"
+  ],
+  "results": [
+    {
+      "scenario": "FixCapabilityContract version >= 53.0",
+      "pass": true,
+      "notes": "version=53.0"
+    },
+    {
+      "scenario": "engine_registry_compatibility=phase-75",
+      "pass": true,
+      "notes": "got: phase-75"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "GENERATE_RECOMMENDATION_MANIFEST capability present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT category=recommendation",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT production_certified=false",
+      "pass": true,
+      "notes": "Recommendation contract must not imply production certification"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT compliance_claim_allowed=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "RECOMMENDATION_CONTRACT requires_human_review=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 74 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Phase 73 capabilities still present (regression)",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_governance preserved at root",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_signals_available preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "total_findings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommended_next_actions preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "evidence preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.recommendation_governance preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.recommendation_governance.total_findings preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.recommendation_governance.recommended_next_actions preserved",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "exposed present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_signals_available=true",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "total_findings=3",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommended_next_actions exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "unsafe_auto_actions exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "human_review_actions exposed",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_authority=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "auto_apply_authority=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "exposed present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "total_findings=0",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommended_next_actions empty",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "unsafe_auto_actions empty",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "human_review_actions empty",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_authority forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "auto_apply_authority forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "standard_certified forced to false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no recommendation_governance -> undefined in normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "no recommendation_governance -> exposed undefined",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Empty audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Null audit data → available=false",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "production_certified at root unaffected by recommendation_governance",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.production_certified unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "artifact_trust.review_required unaffected",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "recommendation_governance contains no local filesystem paths",
+      "pass": true,
+      "notes": "No local paths found in governance payload"
+    },
+    {
+      "scenario": "FixAuditNormalizer has recommendation_governance passthrough",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "FixAuditNormalizer has Phase 75 annotation",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "delta_report.recommendation_governance passthrough present",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService resolves recommendation_governance sources",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes recommendation_governance in artifact_summary",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "PreflightService exposes recommendation_governance at root payload",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "All 75B scenarios successfully normalized",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "Governance invariants hold for all 75B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "total_findings preserved across 75B scenarios",
+      "pass": true,
+      "notes": "OK"
+    },
+    {
+      "scenario": "action lists preserved across 75B scenarios",
+      "pass": true,
+      "notes": "OK"
+    }
+  ],
+  "summary": {
+    "total": 56,
+    "passed": 56,
+    "failed": 0
+  }
+}
